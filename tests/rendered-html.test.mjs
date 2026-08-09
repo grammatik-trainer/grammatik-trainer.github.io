@@ -41,7 +41,7 @@ test("server-renders the German training application", async () => {
   assert.match(html, /application\/ld\+json/);
   assert.match(html, /href="\/review\/"/);
   assert.match(html, /href="\/progress\/"/);
-  assert.match(html, /href="\/LICENSE\.txt"/);
+  assert.match(html, /href="https:\/\/github\.com\/grammatik-trainer\/grammatik-trainer\.github\.io"/);
   assert.doesNotMatch(html, /\.vinext\/fonts|\/Users\//);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });

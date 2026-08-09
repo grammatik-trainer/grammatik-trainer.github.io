@@ -637,7 +637,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
         <nav aria-label="Trainingskategorien">
           {nounCategories.map((item) => <a key={item.id} href={trainingPath(item.id)} onClick={(event) => handleCategoryLink(event, item.id)}>{item.label}</a>)}
         </nav>
-        <p><a href="/LICENSE.txt">MIT-Lizenz</a></p>
+        <p><a href="https://github.com/grammatik-trainer/grammatik-trainer.github.io" target="_blank" rel="noopener noreferrer">GitHub</a> — mitmachen &amp; Fehler melden</p>
       </footer>
 
       {settingsOpen && (
