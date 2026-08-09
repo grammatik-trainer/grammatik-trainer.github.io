@@ -37,6 +37,7 @@ import {
   updateWordProgress,
 } from "../lib/engine";
 import { hintAt } from "../lib/hints";
+import { decodeProgress, encodeProgress } from "../lib/transfer";
 import { emptyData, loadData, saveData, type SprintData } from "../lib/storage";
 import { routeState, trainingPath, viewPath, type TrainerView } from "../lib/routes";
 
@@ -107,6 +108,9 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
   const [canInstall, setCanInstall] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIos, setIsIos] = useState(false);
+  const [transferCode, setTransferCode] = useState("");
+  const [transferStatus, setTransferStatus] = useState<string | null>(null);
+  const linkImportDone = useRef(false);
   const installPrompt = useRef<InstallPromptEvent | null>(null);
   const [category, setCategory] = useState<CategoryId>(initialCategory ?? "all");
   const pool = useMemo(() => nounsForCategory(category), [category]);
@@ -484,30 +488,73 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
     else changeCategory(nextCategory);
   };
 
-  const resetProgress = () => {
-    if (!window.confirm("Gesamten Lernfortschritt wirklich zurücksetzen?")) return;
-    const nextData: SprintData = {
-      ...structuredClone(emptyData),
-      theme: data.theme,
-      settings: { ...data.settings },
-    };
+  /** Ersetzt den gesamten Lernstand und beginnt einen frischen Sprint darauf. */
+  const restartWith = useCallback((nextData: SprintData) => {
     reviewQueue.current = [];
     reviewNeeds.current = {};
     wrongThisSprint.current = new Set();
     freshThisSprint.current = new Set();
-    setMasteredAtSprintStart(new Set());
     recentIds.current = [];
+    setMasteredAtSprintStart(masteredWordIds(nextData.mistakes));
     setSession(emptySession);
     setSeconds(0);
     setFeedback(null);
     setShowHint(false);
     setSprintFinished(false);
     setSettingsOpen(false);
-    setCurrent(pickNext(pool, "", {}));
+    setCurrent(pickNext(pool, "", nextData.mistakes));
     startedAt.current = Date.now();
     lastActiveAt.current = Date.now();
     persist(nextData);
+  }, [persist, pool]);
+
+  const resetProgress = () => {
+    if (!window.confirm("Gesamten Lernfortschritt wirklich zurücksetzen?")) return;
+    restartWith({ ...structuredClone(emptyData), theme: data.theme, settings: { ...data.settings } });
   };
+
+  const copyProgress = useCallback(async () => {
+    const code = await encodeProgress(data);
+    setTransferCode(code);
+    try {
+      await navigator.clipboard.writeText(code);
+      setTransferStatus("Code kopiert. Im anderen Browser unten einfügen.");
+    } catch {
+      setTransferStatus("Kopieren nicht erlaubt — markiere den Code im Feld und kopiere ihn selbst.");
+    }
+  }, [data]);
+
+  const importProgress = useCallback(async () => {
+    const next = await decodeProgress(transferCode, data);
+    if (!next) {
+      setTransferStatus("Dieser Code lässt sich nicht lesen.");
+      return;
+    }
+    if (!window.confirm("Fortschritt aus dem Code übernehmen? Dein aktueller Stand wird ersetzt.")) return;
+    setTransferCode("");
+    setTransferStatus(null);
+    restartWith(next);
+  }, [data, restartWith, transferCode]);
+
+  useEffect(() => {
+    // Der Code steht im Fragment, nicht in der Query: so erreicht er weder Server
+    // noch Statistik. Er wird sofort aus der Adresse entfernt, damit ein Neuladen
+    // nicht erneut fragt.
+    if (!ready || linkImportDone.current) return;
+    const match = /[#&]progress=([^&]+)/.exec(window.location.hash);
+    if (!match) return;
+    linkImportDone.current = true;
+    router.replace(window.location.pathname + window.location.search, { scroll: false });
+    void (async () => {
+      const next = await decodeProgress(decodeURIComponent(match[1]), data);
+      if (!next) {
+        window.alert("Dieser Link enthält keinen lesbaren Fortschritt.");
+        return;
+      }
+      if (!window.confirm("Fortschritt aus dem Link übernehmen? Dein aktueller Stand wird ersetzt.")) return;
+      restartWith(next);
+    })();
+  }, [data, ready, restartWith, router]);
 
   const reviewNouns = useMemo(() => Object.entries(data.mistakes)
     .filter(([, stat]) => stat.wrong > 0)
@@ -739,6 +786,16 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
                 {canInstall && <button className="install-button" type="button" onClick={runInstall}>Installieren</button>}
               </div>
             )}
+            <div className="setting-row">
+              <span><strong>Fortschritt übertragen</strong><small>Code kopieren und im anderen Browser einfügen — etwa aus Safari in die App auf dem Startbildschirm.</small></span>
+              <button className="install-button" type="button" onClick={copyProgress}>Kopieren</button>
+            </div>
+            <div className="transfer-field">
+              <label className="sr-only" htmlFor="transfer-code">Übertragungscode</label>
+              <input id="transfer-code" type="text" value={transferCode} placeholder="ddd1:…" spellCheck={false} autoComplete="off" onChange={(event) => setTransferCode(event.target.value)} />
+              <button className="install-button" type="button" onClick={importProgress} disabled={!transferCode.trim()}>Einfügen</button>
+            </div>
+            {transferStatus && <p className="privacy-note" aria-live="polite">{transferStatus}</p>}
             <button className="reset-button" type="button" onClick={resetProgress}>Lernfortschritt zurücksetzen</button>
             <p className="privacy-note">Dein Fortschritt bleibt ausschließlich im Browser dieses Geräts.</p>
           </section>
