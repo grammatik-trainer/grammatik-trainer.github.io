@@ -6,16 +6,16 @@ export interface TrainerHint {
 /** Die Regeln, die das Training sonst nirgends erklärt — Kernregeln zuerst. */
 export const trainerHints: TrainerHint[] = [
   {
-    headline: "Zweimal richtig hintereinander — dann gilt ein Wort als sicher.",
-    detail: "Ein Fehler setzt die Serie zurück; das Wort beginnt wieder bei null.",
+    headline: "Ein Wort wird sicher, wenn du es zweimal nacheinander richtig hast.",
+    detail: "Hast du es im selben Sprint verpasst, zählt es frühestens im nächsten.",
   },
   {
     headline: "Falsch beantwortete Wörter kommen nach 3–5 anderen Wörtern zurück.",
     detail: "So bleibt der Abstand groß genug, dass du dich wirklich erinnern musst.",
   },
   {
-    headline: "Ein Wort, das du im laufenden Sprint verpasst hast, wird frühestens im nächsten sicher.",
-    detail: "Die zwei Wiederholungen holen es zurück — den Titel gibt es erst danach.",
+    headline: "Ein verpasstes Wort musst du zweimal richtig wiederholen.",
+    detail: "Vorher endet der Sprint nicht, auch wenn das Ziel schon erreicht ist.",
   },
   {
     headline: "Jeder Sprint zeigt mindestens drei noch unsichere Wörter.",
@@ -23,35 +23,27 @@ export const trainerHints: TrainerHint[] = [
   },
   {
     headline: "Ein Fehler nimmt einem sicheren Wort den Status sofort.",
-    detail: "Egal, wie oft es vorher saß — es zählt wieder als unsicher.",
+    detail: "Die Serie beginnt wieder bei null — egal, wie oft das Wort vorher saß.",
   },
   {
-    headline: "Sichere Wörter verschwinden nicht, sie kommen nur rund dreimal seltener.",
+    headline: "Sichere Wörter verschwinden nicht, sie kommen nur seltener.",
     detail: "Kurze Auffrischungen halten sie im Gedächtnis.",
   },
   {
     headline: "Zwölf richtige Antworten bringen den Sprint ins Ziel.",
-    detail: "Ein Fehler wirft dich auf die letzte Vierermarke zurück, nicht auf null.",
+    detail: "Ein Fehler wirft dich nur auf die vorherige Stufe bei 0, 4 oder 8 zurück.",
   },
   {
     headline: "Nach zehn Sekunden ohne Antwort pausiert die Zeit.",
     detail: "Pausen kosten dich nichts — gemessen wird nur, was du wirklich brauchst.",
   },
   {
-    headline: "Der Hinweis zeigt Übersetzung und Plural.",
-    detail: "Er kostet nichts — nutze ihn, statt zu raten.",
-  },
-  {
-    headline: "Mit 1/2/3 oder J/K/L antwortest du ohne Maus.",
-    detail: "Das spart bei jedem Wort einen Sekundenbruchteil.",
-  },
-  {
-    headline: "Kategorien wechseln den Wortschatz, nicht deinen Fortschritt.",
-    detail: "Der Lernstand jedes Wortes bleibt erhalten.",
+    headline: "Kategorien wechseln den Wortschatz, nicht deinen Lernstand.",
+    detail: "Jedes Wort behält seinen Fortschritt — nur der laufende Sprint beginnt neu.",
   },
   {
     headline: "Schon eine Antwort pro Tag hält deine Tagesserie am Leben.",
-    detail: "Länge zählt hier mehr als Menge.",
+    detail: "Erst nach zwei Tagen ohne Antwort ist die Serie weg.",
   },
 ];
 
