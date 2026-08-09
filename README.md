@@ -3,7 +3,7 @@
 **→ [grammatik-trainer.github.io](https://grammatik-trainer.github.io/)**
 
 A fast, keyboard-first trainer for German noun genders. Pick **der**, **die** or
-**das**, and the next word is already waiting — 240 A1/A2 nouns in the
+**das**, and the next word is already waiting — 300 nouns from A1 to B2 in the
 nominative case, with your mistakes scheduled for extra repetition.
 
 Nothing to install and no account: progress, settings, daily streak and personal
@@ -15,8 +15,8 @@ Training is split into crawlable category pages:
 
 | Path | What is in it |
 | --- | --- |
-| `/` | All 240 words |
-| `/training/challenge/` | 60 hard and irregular ones |
+| `/` | The 240 core words, A1–A2 |
+| `/training/challenge/` | 60 additional hard ones, B1–B2 |
 | `/training/people/`, `/training/life/`, `/training/nature/`, `/training/travel/` | Thematic sets |
 
 `/review/` drills the words you got wrong, `/progress/` shows your streak and

@@ -539,7 +539,11 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
                   <label className="category-picker">
                     <span className="sr-only">Kategorie wählen</span>
                     <select value={category} onChange={(event) => changeCategory(event.target.value as CategoryId)}>
-                      {nounCategories.map((item) => <option value={item.id} key={item.id}>{item.label} · {nounsForCategory(item.id).length}</option>)}
+                      {nounCategories.map((item) => {
+                        // Nur die beiden Gesamtlisten brauchen einen Zusatz — sonst ist unklar, dass sie sich ergänzen.
+                        const note = item.id === "all" ? " Basiswörter" : item.id === "challenge" ? " (zusätzlich)" : "";
+                        return <option value={item.id} key={item.id}>{item.label} · {nounsForCategory(item.id).length}{note}</option>;
+                      })}
                     </select>
                   </label>
                   <strong>{currentCategory.description}</strong>
@@ -633,7 +637,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
       </main>
 
       <footer className="site-footer">
-        <p>240 deutsche Substantive von A1 bis B2.</p>
+        <p>300 deutsche Substantive von A1 bis B2.</p>
         <nav aria-label="Trainingskategorien">
           {nounCategories.map((item) => <a key={item.id} href={trainingPath(item.id)} onClick={(event) => handleCategoryLink(event, item.id)}>{item.label}</a>)}
         </nav>
