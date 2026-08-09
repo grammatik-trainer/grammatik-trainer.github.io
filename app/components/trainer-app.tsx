@@ -62,6 +62,13 @@ interface ReviewItem {
   dueAtAnswered: number;
 }
 
+/** Chrome reicht die Installation über dieses Event durch; Safari kennt es nicht. */
+interface InstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+}
+
+const sprintsBeforeInstallHint = 3;
+
 const emptySession: SessionState = { answered: 0, correct: 0, totalMs: 0, streak: 0, points: 0, progress: 0, pendingReviews: 0, freshRemaining: 0 };
 
 function Icon({ children }: { children: React.ReactNode }) {
@@ -94,6 +101,10 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
   const [showHint, setShowHint] = useState(false);
   const [sprintFinished, setSprintFinished] = useState(false);
   const [hintIndex, setHintIndex] = useState(0);
+  const [canInstall, setCanInstall] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [isIos, setIsIos] = useState(false);
+  const installPrompt = useRef<InstallPromptEvent | null>(null);
   const [category, setCategory] = useState<CategoryId>(initialCategory ?? "all");
   const pool = useMemo(() => nounsForCategory(category), [category]);
   const startedAt = useRef(0);
@@ -151,6 +162,44 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
     if (nextTimer.current !== null) window.clearTimeout(nextTimer.current);
   }, []);
 
+  useEffect(() => {
+    // Im Dev-Server würde der Cache die ungehashten Modul-URLs von Vite festhalten.
+    if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      // Ohne Service Worker läuft alles weiter, nur eben ohne Offline-Betrieb.
+    });
+  }, []);
+
+  useEffect(() => {
+    const standalone = window.matchMedia("(display-mode: standalone)");
+    const readPlatform = () => {
+      // Safari meldet den Homescreen-Modus über eine eigene, nicht standardisierte Eigenschaft.
+      setIsStandalone(standalone.matches || (navigator as Navigator & { standalone?: boolean }).standalone === true);
+      // iPadOS meldet sich als Mac, verrät sich aber über die Touchpunkte.
+      const touchMac = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+      setIsIos(/iphone|ipad|ipod/i.test(navigator.userAgent) || touchMac);
+    };
+    readPlatform();
+    const capture = (event: Event) => {
+      event.preventDefault();
+      installPrompt.current = event as InstallPromptEvent;
+      setCanInstall(true);
+    };
+    const installed = () => {
+      installPrompt.current = null;
+      setCanInstall(false);
+      setIsStandalone(true);
+    };
+    window.addEventListener("beforeinstallprompt", capture);
+    window.addEventListener("appinstalled", installed);
+    standalone.addEventListener("change", readPlatform);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", capture);
+      window.removeEventListener("appinstalled", installed);
+      standalone.removeEventListener("change", readPlatform);
+    };
+  }, []);
+
   const persist = useCallback((next: SprintData) => {
     setData(next);
     saveData(next);
@@ -159,6 +208,23 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
   const closeMenu = useCallback(() => {
     setMenuOpen(false);
     queueMicrotask(() => menuButtonRef.current?.focus());
+  }, []);
+
+  const dismissInstallHint = useCallback(() => {
+    setData((current) => {
+      const next = { ...current, settings: { ...current.settings, installHintDismissed: true } };
+      saveData(next);
+      return next;
+    });
+  }, []);
+
+  const runInstall = useCallback(async () => {
+    const event = installPrompt.current;
+    if (!event) return;
+    // Ein Prompt-Event lässt sich nur einmal verwenden; Chrome schickt bei Bedarf ein neues.
+    await event.prompt().catch(() => undefined);
+    installPrompt.current = null;
+    setCanInstall(false);
   }, []);
 
   const openSettings = useCallback(() => {
@@ -459,6 +525,11 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
   const newMasteredCount = countNewlyMastered(pool, data.mistakes, masteredAtSprintStart);
   const currentCategory = nounCategories.find((item) => item.id === category) ?? nounCategories[0];
   const hint = hintAt(hintIndex);
+  // Erst nach ein paar geschafften Sprints fragen — vorher weiß niemand, ob die App etwas taugt.
+  // Ohne Prompt und ohne iOS-Teilen-Menü gäbe es nichts anzubieten — etwa in Desktop-Firefox.
+  const installOffered = !isStandalone && (canInstall || isIos);
+  const showInstallHint = ready && installOffered && !data.settings.installHintDismissed
+    && data.sprints.completed >= sprintsBeforeInstallHint;
   const sessionAccuracy = accuracy(session.correct, session.answered);
   const sessionAverage = session.answered ? session.totalMs / session.answered : 0;
   const totalAccuracy = accuracy(data.totals.correct, data.totals.answered);
@@ -504,6 +575,15 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
       {menuOpen && <div className="menu-backdrop" role="presentation" onMouseDown={closeMenu} />}
 
       <main id="main-content" tabIndex={-1}>
+        {view === "training" && showInstallHint && (
+          <section className="install-note local-data" aria-label="App installieren">
+            <Icon>⤓</Icon>
+            <p><strong>Leg dir das Training auf den Startbildschirm.</strong><br />{canInstall ? "Ein Tippen — danach startet es ohne Browserleiste." : "Teilen → Zum Home-Bildschirm."}</p>
+            {canInstall && <button className="install-button" type="button" onClick={runInstall}>Installieren</button>}
+            <button className="round-button" type="button" onClick={dismissInstallHint} aria-label="Hinweis ausblenden">×</button>
+          </section>
+        )}
+
         {view === "training" && (
           <div className="training-layout">
             <aside className="session-column" aria-label="Sitzungsstatistik">
@@ -650,6 +730,12 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
             <div className="card-heading"><h2 id="settings-title">Einstellungen</h2><button className="round-button" onClick={closeSettings} aria-label="Einstellungen schließen" autoFocus>×</button></div>
             <label className="setting-row"><span><strong>Töne</strong><small>Kurzes Feedback nach jeder Antwort</small></span><input type="checkbox" checked={data.settings.sound} onChange={(event) => persist({ ...data, settings: { ...data.settings, sound: event.target.checked } })} /></label>
             <label className="setting-row"><span><strong>Tempo</strong><small>Wie schnell die nächste Frage erscheint</small></span><select value={data.settings.feedbackDelay} onChange={(event) => persist({ ...data, settings: { ...data.settings, feedbackDelay: Number(event.target.value) } })}><option value="250">Schnell</option><option value="420">Normal</option><option value="700">Ruhig</option></select></label>
+            {installOffered && (
+              <div className="setting-row">
+                <span><strong>Zum Startbildschirm</strong><small>{canInstall ? "Als App ohne Browserleiste öffnen" : "Teilen → Zum Home-Bildschirm"}</small></span>
+                {canInstall && <button className="install-button" type="button" onClick={runInstall}>Installieren</button>}
+              </div>
+            )}
             <button className="reset-button" type="button" onClick={resetProgress}>Lernfortschritt zurücksetzen</button>
             <p className="privacy-note">Dein Fortschritt bleibt ausschließlich im Browser dieses Geräts.</p>
           </section>

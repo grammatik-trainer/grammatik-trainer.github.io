@@ -78,6 +78,9 @@ main { width: min(1480px, calc(100% - 36px)); margin: 0 auto; padding: 20px 0 34
 .site-footer nav { display: flex; flex: 1 1 520px; flex-wrap: wrap; justify-content: center; gap: 6px 14px; }
 .site-footer a { color: inherit; }
 .site-footer a:hover, .site-footer a:focus-visible { color: var(--ink); }
+.install-note { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; padding: 13px 14px 13px 18px; border: 1px solid #ded8ff; border-radius: 16px; background: linear-gradient(120deg, var(--violet-soft), var(--surface)); color: var(--ink); }
+.install-note .icon { font-size: 22px; }.install-note p { flex: 1; min-width: 0; margin: 0; font-size: 13px; line-height: 1.5; }
+.install-button { padding: 9px 15px; border: 0; border-radius: 10px; background: var(--violet); color: white; font-size: 13px; font-weight: 750; white-space: nowrap; cursor: pointer; }
 .training-layout { display: grid; grid-template-columns: 380px minmax(0, 1fr) minmax(310px, .78fr); grid-template-areas: "session trainer trainer" "session week mistakes"; gap: 16px; align-items: start; }
 .card { border: 1px solid var(--line); border-radius: 18px; background: color-mix(in srgb, var(--surface) 96%, transparent); box-shadow: var(--shadow); }
 .session-column { grid-area: session; display: grid; gap: 14px; }
@@ -89,7 +92,8 @@ main { width: min(1480px, calc(100% - 36px)); margin: 0 auto; padding: 20px 0 34
 .metric-grid > div { min-width: 0; display: grid; justify-items: center; gap: 4px; padding: 17px 8px; text-align: center; }.metric-grid > div:nth-child(odd) { border-right: 1px solid var(--line); }.metric-grid > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
 .metric-grid .icon { min-height: 25px; font-size: 23px; }.metric-grid > div:nth-child(2) .icon { color: var(--green); }.metric-grid > div:nth-child(3) .icon { color: var(--orange); }.metric-grid > div:nth-child(4) .icon { color: var(--blue); }
 .metric-grid span { color: var(--muted); font-size: 12px; }.metric-grid strong { margin-top: 4px; font-size: 24px; letter-spacing: -1px; }.metric-grid small { color: var(--muted); font-size: 11px; }
-.focus-note { position: relative; display: flex; align-items: center; gap: 16px; padding: 16px 34px 16px 20px; border: 1px solid #ded8ff; border-radius: 16px; background: linear-gradient(120deg, var(--violet-soft), var(--surface)); color: var(--ink); }.focus-note .icon { font-size: 27px; }.focus-note p { margin: 0; font-size: 13px; line-height: 1.55; }
+/* Nur mobil sichtbar — auf dem Desktop haben Trainerkarte und Seitenspalte genug Kontext. */
+.focus-note { position: relative; display: none; align-items: center; gap: 16px; padding: 16px 34px 16px 20px; border: 1px solid #ded8ff; border-radius: 16px; background: linear-gradient(120deg, var(--violet-soft), var(--surface)); color: var(--ink); }.focus-note .icon { font-size: 27px; }.focus-note p { margin: 0; font-size: 13px; line-height: 1.55; }
 /* Der Weiterblättern-Knopf bleibt fokussierbar und taucht erst bei Hover auf. */
 .hint-next { position: absolute; top: 50%; right: 7px; width: 24px; height: 24px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--violet); font-size: 17px; line-height: 1; opacity: 0; transform: translateY(-50%); transition: opacity .15s ease, background-color .15s ease; cursor: pointer; }
 .focus-note:hover .hint-next, .focus-note:focus-within .hint-next { opacity: 1; }
@@ -146,7 +150,7 @@ main { width: min(1480px, calc(100% - 36px)); margin: 0 auto; padding: 20px 0 34
   .topbar-menu .round-button { width: auto; height: auto; display: flex; align-items: center; justify-content: flex-start; gap: 13px; padding: 13px 14px; border: 0; border-radius: 12px; background: transparent; color: var(--muted); font-weight: 700; }
   .topbar-menu .round-button:hover { background: var(--violet-soft); }
   .topbar-menu .action-label { display: inline; }
-  .training-layout { grid-template-columns: 1fr; grid-template-areas: "trainer" "session" "focus" "week" "mistakes"; }.session-column { display: contents; }.trainer-card { min-height: 510px; }.session-card { grid-row: auto; }.metric-grid { grid-template-columns: repeat(4, 1fr); }.metric-grid > div:nth-child(n) { border: 0; border-right: 1px solid var(--line); }.metric-grid > div:last-child { border-right: 0; }.personal-card { display: none; }.focus-note { grid-area: focus; }
+  .training-layout { grid-template-columns: 1fr; grid-template-areas: "trainer" "session" "focus" "week" "mistakes"; }.session-column { display: contents; }.trainer-card { min-height: 510px; }.session-card { grid-row: auto; }.metric-grid { grid-template-columns: repeat(4, 1fr); }.metric-grid > div:nth-child(n) { border: 0; border-right: 1px solid var(--line); }.metric-grid > div:last-child { border-right: 0; }.personal-card { display: none; }.focus-note { grid-area: focus; display: flex; }
   /* Ohne Hover-Zeiger muss der Weiterblättern-Knopf sichtbar bleiben. */
   .hint-next { opacity: 1; }
 .week-card, .mistakes-card { min-height: 190px; }.summary-grid { grid-template-columns: repeat(2, 1fr); }.reference-card { grid-template-columns: 1fr; }.review-grid { grid-template-columns: repeat(2, 1fr); } main { padding-bottom: 14px; }

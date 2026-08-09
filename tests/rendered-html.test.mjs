@@ -46,6 +46,27 @@ test("server-renders the German training application", async () => {
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
+test("ships everything the home screen shortcut needs", async () => {
+  const html = await (await render()).text();
+  assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest"\/?>/);
+  assert.match(html, /<link rel="apple-touch-icon" href="\/apple-touch-icon\.png"\/?>/);
+
+  const client = new URL("../dist/client/", import.meta.url);
+  const manifest = JSON.parse(await readFile(new URL("manifest.webmanifest", client), "utf8"));
+  assert.equal(manifest.start_url, "/");
+  assert.equal(manifest.display, "standalone");
+  // Android braucht 192 und 512 plus eine maskierbare Variante, iOS das eigene PNG.
+  assert.deepEqual(manifest.icons.map((icon) => icon.sizes), ["192x192", "512x512", "512x512"]);
+  assert.equal(manifest.icons.filter((icon) => icon.purpose === "maskable").length, 1);
+  for (const icon of [...manifest.icons.map((entry) => entry.src.slice(1)), "apple-touch-icon.png"]) {
+    assert.ok((await readFile(new URL(icon, client))).byteLength > 0, `${icon} fehlt im Build`);
+  }
+
+  const worker = await readFile(new URL("sw.js", client), "utf8");
+  // Navigationen dürfen nie cache-first laufen, sonst friert ein Deploy die alte Seite ein.
+  assert.match(worker, /request\.mode === "navigate"[\s\S]{0,80}networkFirst/);
+});
+
 test("publishes crawlable category routes and keeps personal routes out of search", async () => {
   const category = await (await render("/training/challenge/")).text();
   assert.match(category, /<title>Schwer &amp; selten — Der Die Das Sprint<\/title>/);

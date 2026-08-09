@@ -30,6 +30,7 @@ export interface SprintData {
     sound: boolean;
     feedbackDelay: number;
     category: CategoryId;
+    installHintDismissed: boolean;
   };
   totals: {
     answered: number;
@@ -53,7 +54,7 @@ export const STORAGE_KEY = "ddd-sprint:v1";
 export const emptyData: SprintData = {
   version: 1,
   theme: "light",
-  settings: { sound: false, feedbackDelay: 420, category: "all" },
+  settings: { sound: false, feedbackDelay: 420, category: "all", installHintDismissed: false },
   totals: { answered: 0, correct: 0, totalMs: 0, points: 0 },
   best: { speedMs: null, score: 0, streak: 0 },
   sprints: { completed: 0, passed: 0, passStreak: 0, bestCorrect: 0, bestTimeMs: null },
@@ -99,6 +100,7 @@ export function sanitizeData(value: unknown): SprintData {
       ...emptyData.settings,
       ...candidate.settings,
       category: isStoredCategory(candidate.settings?.category) ? candidate.settings.category : "all",
+      installHintDismissed: candidate.settings?.installHintDismissed === true,
     },
     totals: { ...emptyData.totals, ...candidate.totals },
     best: { ...emptyData.best, ...candidate.best },

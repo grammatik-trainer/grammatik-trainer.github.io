@@ -34,6 +34,14 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="shortcut icon" href="/favicon.svg" />
+        {/* iOS liest das Manifest nicht — Symbol und Titel für den Homescreen kommen aus diesen Tags. */}
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-title" content="Der Die Das" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f6ff" />
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#111323" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         {/* Cloudflare Web Analytics: cookiefrei, misst nur Seitenaufrufe. Der Token ist öffentlich. */}
         <script defer type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "51c2ec958a6146d995055263ecf49992"}' />
