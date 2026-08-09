@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { allNouns } from "../app/lib/data.ts";
-import { dayKey, previousDay } from "../app/lib/engine.ts";
+import { calculateDailyStreak, dayKey, previousDay } from "../app/lib/engine.ts";
 import { emptyData, type SprintData } from "../app/lib/storage.ts";
 import { decodeProgress, encodeProgress, transferDays } from "../app/lib/transfer.ts";
 
@@ -34,18 +34,32 @@ test("a transfer code survives the round trip", async () => {
   assert.deepEqual(restored.mistakes[allNouns[0].id], source.mistakes[allNouns[0].id]);
 });
 
-test("a transfer code stays short enough to paste", async () => {
-  const code = await encodeProgress(heavyLearner());
+test("even the heaviest possible progress stays pasteable", async () => {
+  // Schlimmster Fall: jedes Wort berührt und die Tagesgrenze voll ausgereizt.
+  const data = heavyLearner();
+  let key = dayKey();
+  for (let index = 0; index < transferDays + 100; index += 1) {
+    data.days[key] = { answered: 25, correct: 23, totalMs: 90_000 };
+    key = previousDay(key);
+  }
+  const code = await encodeProgress(data);
   assert.ok(code.startsWith("ddd1:"));
-  // Selbst der schwerste Stand muss in ein Textfeld und in eine Adresszeile passen.
-  assert.ok(code.length < 4000, `Code ist ${code.length} Zeichen lang`);
-});
+  assert.ok(code.length < 8000, `Code ist ${code.length} Zeichen lang`);
 
-test("only the last two weeks of daily history travel along", async () => {
-  const restored = await decodeProgress(await encodeProgress(heavyLearner()), emptyData);
+  const restored = await decodeProgress(code, emptyData);
   assert.ok(restored);
   assert.equal(Object.keys(restored.days).length, transferDays);
-  assert.ok(restored.days[dayKey()]);
+});
+
+test("the daily streak survives a transfer", async () => {
+  const source = heavyLearner();
+  const days = Object.keys(source.days).length;
+  const restored = await decodeProgress(await encodeProgress(source), emptyData);
+  assert.ok(restored);
+  // Die Tagesserie liest die ganze Historie — ein zu enger Deckel würde sie beim Umzug kappen.
+  assert.equal(Object.keys(restored.days).length, days);
+  assert.equal(calculateDailyStreak(restored.days), calculateDailyStreak(source.days));
+  assert.ok(days < transferDays);
 });
 
 test("untouched words are left out of the code", async () => {
@@ -78,6 +92,21 @@ test("unreadable codes are rejected instead of wiping progress", async () => {
   assert.equal(await decodeProgress("ddd9:AAAA", emptyData), null);
   // Abgeschnitten beim Kopieren — der häufigste Fehler von Hand.
   assert.equal(await decodeProgress(valid.slice(0, valid.length - 40), emptyData), null);
+});
+
+test("a compression bomb is refused instead of unpacked", async () => {
+  // Gleichförmige Daten packt gzip tausendfach — der Link würde sonst beim
+  // Öffnen zig Megabyte belegen, bevor überhaupt jemand zustimmt.
+  const huge = new TextEncoder().encode(JSON.stringify({ v: 1, filler: "a".repeat(20_000_000) }));
+  const packed = new Blob([huge as BlobPart]).stream().pipeThrough(new CompressionStream("gzip"));
+  const bytes = new Uint8Array(await new Response(packed).arrayBuffer());
+  const code = `ddd1:${Buffer.from(bytes).toString("base64url")}`;
+  assert.ok(code.length < 64_000, `Bombe ist ${code.length} Zeichen klein`);
+  assert.equal(await decodeProgress(code, emptyData), null);
+});
+
+test("an oversized code is refused before decoding", async () => {
+  assert.equal(await decodeProgress(`ddd1:${"A".repeat(70_000)}`, emptyData), null);
 });
 
 test("a code written without gzip is still readable", async () => {

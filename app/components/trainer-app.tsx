@@ -490,6 +490,8 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
 
   /** Ersetzt den gesamten Lernstand und beginnt einen frischen Sprint darauf. */
   const restartWith = useCallback((nextData: SprintData) => {
+    // Ein noch laufender Feedback-Timer würde den frischen Sprint gleich wieder überschreiben.
+    if (nextTimer.current !== null) window.clearTimeout(nextTimer.current);
     reviewQueue.current = [];
     reviewNeeds.current = {};
     wrongThisSprint.current = new Set();
@@ -546,7 +548,16 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
     linkImportDone.current = true;
     router.replace(window.location.pathname + window.location.search, { scroll: false });
     void (async () => {
-      const next = await decodeProgress(decodeURIComponent(match[1]), data);
+      // Ein abgeschnittenes Fragment lässt decodeURIComponent werfen, und der
+      // Link ist danach weg — die Meldung darf also nicht verloren gehen.
+      let raw: string;
+      try {
+        raw = decodeURIComponent(match[1]);
+      } catch {
+        window.alert("Dieser Link enthält keinen lesbaren Fortschritt.");
+        return;
+      }
+      const next = await decodeProgress(raw, data);
       if (!next) {
         window.alert("Dieser Link enthält keinen lesbaren Fortschritt.");
         return;
@@ -625,17 +636,8 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
       {menuOpen && <div className="menu-backdrop" role="presentation" onMouseDown={closeMenu} />}
 
       <main id="main-content" tabIndex={-1}>
-        {view === "training" && showInstallHint && (
-          <section className="install-note local-data" aria-label="App installieren">
-            <Icon>⤓</Icon>
-            <p><strong>Leg dir das Training auf den Startbildschirm.</strong><br />{canInstall ? "Ein Tippen — danach startet es ohne Browserleiste." : "Teilen → Zum Home-Bildschirm. Nur dort bleibt dein Fortschritt dauerhaft: Safari löscht ihn nach etwa einer Woche ohne Besuch."}</p>
-            {canInstall && <button className="install-button" type="button" onClick={runInstall}>Installieren</button>}
-            <button className="round-button" type="button" onClick={dismissInstallHint} aria-label="Hinweis ausblenden">×</button>
-          </section>
-        )}
-
         {view === "training" && (
-          <div className="training-layout">
+          <div className={`training-layout${showInstallHint ? " with-install" : ""}`}>
             <aside className="session-column" aria-label="Sitzungsstatistik">
               <section className="card session-card">
                 <div className="card-heading"><h2>Deine Session</h2><span className="pill">Heute</span></div>
@@ -726,6 +728,19 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
                 <span className="sprint-progress-track"><i style={{ width: `${(session.progress / sprintLength) * 100}%` }} /></span>
               </div>
             </section>
+
+            {showInstallHint && (
+              <section className="install-note local-data" aria-label="App installieren">
+                <Icon>⤓</Icon>
+                <p>
+                  <strong>Leg dir das Training auf den Startbildschirm.</strong><br />
+                  {canInstall ? "Ein Tippen — danach startet es ohne Browserleiste." : "Teilen → Zum Home-Bildschirm. Nur dort bleibt dein Fortschritt dauerhaft: Safari löscht ihn nach etwa einer Woche ohne Besuch."}<br />
+                  Deinen bisherigen Stand überträgst du danach über Menü → Einstellungen.
+                </p>
+                {canInstall && <button className="install-button" type="button" onClick={runInstall}>Installieren</button>}
+                <button className="round-button" type="button" onClick={dismissInstallHint} aria-label="Hinweis ausblenden">×</button>
+              </section>
+            )}
 
             <section className="card week-card">
               <div className="card-heading"><h2>Diese Woche</h2><button type="button" onClick={() => navigateView("progress")}>Alle Details</button></div>

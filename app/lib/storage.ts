@@ -1,5 +1,6 @@
 import type { MistakeStat } from "./engine";
-import type { CategoryId } from "./data";
+// Laufzeitimport statt reinem Typimport — deshalb mit Endung, damit Node die Tests direkt ausführen kann.
+import { nounById, type CategoryId } from "./data.ts";
 
 const categoryIds = new Set<CategoryId>(["all", "life", "people", "travel", "nature", "challenge"]);
 
@@ -67,10 +68,18 @@ function nonNegativeInteger(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }
 
+function optionalMilliseconds(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
+}
+
+// Ein geteilter Fortschrittscode kommt von außen. Ohne Zahlenprüfung würde aus
+// totals.answered: "1" beim nächsten Treffer die Zeichenkette "11", und ein
+// aufgeblähtes mistakes-Objekt könnte den Speicher des Browsers sprengen.
 function sanitizeMistakes(value: unknown): Record<string, MistakeStat> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const mistakes: Record<string, MistakeStat> = {};
   for (const [id, rawStat] of Object.entries(value)) {
+    if (!nounById.has(id)) continue;
     if (!rawStat || typeof rawStat !== "object" || Array.isArray(rawStat)) continue;
     const stat = rawStat as Partial<MistakeStat>;
     const wrong = nonNegativeInteger(stat.wrong);
@@ -84,30 +93,74 @@ function sanitizeMistakes(value: unknown): Record<string, MistakeStat> {
   return mistakes;
 }
 
+// Ohne Deckel ist die Tageshistorie das einzige unbegrenzte Feld: ein kurzer Code
+// könnte daraus Megabyte machen und saveData an der Speichergrenze scheitern lassen.
+const maxStoredDays = 800;
+
+function sanitizeDays(value: unknown): Record<string, DayStat> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const entries: Array<[string, DayStat]> = [];
+  for (const [key, raw] of Object.entries(value)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) continue;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const day = raw as Partial<DayStat>;
+    const answered = nonNegativeInteger(day.answered);
+    entries.push([key, {
+      answered,
+      // Mehr richtige als gegebene Antworten gibt es nicht — sonst zeigt die Genauigkeit Unsinn.
+      correct: Math.min(answered, nonNegativeInteger(day.correct)),
+      totalMs: nonNegativeInteger(day.totalMs),
+    }]);
+  }
+  // ISO-Datumsschlüssel sortieren sich als Text richtig, also bleiben die jüngsten Tage.
+  entries.sort(([a], [b]) => (a < b ? 1 : a > b ? -1 : 0));
+  return Object.fromEntries(entries.slice(0, maxStoredDays));
+}
+
 export function sanitizeData(value: unknown): SprintData {
   if (!value || typeof value !== "object") return structuredClone(emptyData);
   const candidate = value as Partial<SprintData>;
   if (candidate.version !== 1) return structuredClone(emptyData);
   const mistakes = sanitizeMistakes(candidate.mistakes);
+  // Zähler, die aufeinander aufbauen, werden aneinander gedeckelt.
+  const totalsAnswered = nonNegativeInteger(candidate.totals?.answered);
+  const sprintsCompleted = nonNegativeInteger(candidate.sprints?.completed);
 
+  // Bewusst Feld für Feld statt mit Spread: ein geteilter Code darf keine
+  // unbekannten Schlüssel in den Speicher schmuggeln.
   return {
-    ...structuredClone(emptyData),
-    ...candidate,
     version: 1,
     theme: candidate.theme === "dark" ? "dark" : "light",
     settings: {
-      ...emptyData.settings,
-      ...candidate.settings,
+      sound: candidate.settings?.sound === true,
+      feedbackDelay: typeof candidate.settings?.feedbackDelay === "number" && Number.isFinite(candidate.settings.feedbackDelay)
+        ? Math.min(3000, Math.max(0, Math.floor(candidate.settings.feedbackDelay)))
+        : emptyData.settings.feedbackDelay,
       category: isStoredCategory(candidate.settings?.category) ? candidate.settings.category : "all",
       installHintDismissed: candidate.settings?.installHintDismissed === true,
     },
-    totals: { ...emptyData.totals, ...candidate.totals },
-    best: { ...emptyData.best, ...candidate.best },
-    sprints: { ...emptyData.sprints, ...candidate.sprints },
-    days: candidate.days && typeof candidate.days === "object" ? candidate.days : {},
+    totals: {
+      answered: totalsAnswered,
+      correct: Math.min(totalsAnswered, nonNegativeInteger(candidate.totals?.correct)),
+      totalMs: nonNegativeInteger(candidate.totals?.totalMs),
+      points: nonNegativeInteger(candidate.totals?.points),
+    },
+    best: {
+      speedMs: optionalMilliseconds(candidate.best?.speedMs),
+      score: nonNegativeInteger(candidate.best?.score),
+      streak: nonNegativeInteger(candidate.best?.streak),
+    },
+    sprints: {
+      completed: sprintsCompleted,
+      passed: Math.min(sprintsCompleted, nonNegativeInteger(candidate.sprints?.passed)),
+      passStreak: nonNegativeInteger(candidate.sprints?.passStreak),
+      bestCorrect: nonNegativeInteger(candidate.sprints?.bestCorrect),
+      bestTimeMs: optionalMilliseconds(candidate.sprints?.bestTimeMs),
+    },
+    days: sanitizeDays(candidate.days),
     mistakes,
     recentMistakes: Array.isArray(candidate.recentMistakes)
-      ? candidate.recentMistakes.filter((id): id is string => typeof id === "string").slice(0, 12)
+      ? candidate.recentMistakes.filter((id): id is string => typeof id === "string" && nounById.has(id)).slice(0, 12)
       : [],
   };
 }
@@ -123,5 +176,10 @@ export function loadData(): SprintData {
 }
 
 export function saveData(data: SprintData): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    // Voller oder gesperrter Speicher darf das Training nicht abbrechen —
+    // die Sitzung läuft dann eben nur im Arbeitsspeicher weiter.
+  }
 }

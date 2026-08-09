@@ -15,6 +15,7 @@ import {
   nextSprintStreak,
   nextSprintProgress,
   pickNext,
+  previousDay,
   randomRepeatGap,
   remainingReviewCount,
   reviewIsDue,
@@ -175,9 +176,73 @@ test("invalid stored data falls back safely", () => {
   assert.deepEqual(sanitizeData({ version: 99 }), emptyData);
   assert.equal(sanitizeData({ version: 1, theme: "neon" }).theme, "light");
   assert.equal(sanitizeData({ version: 1, settings: { sound: false, feedbackDelay: 420, category: "unknown" as never } }).settings.category, "all");
-  const sanitized = sanitizeData({ version: 1, mistakes: { broken: null, Haus: { wrong: 1, seen: 3, lastWrong: "2026-08-01", mastered: true } } });
-  assert.equal(sanitized.mistakes.Haus.mastered, false);
+  const sanitized = sanitizeData({ version: 1, mistakes: { broken: null, haus: { wrong: 1, seen: 3, lastWrong: "2026-08-01", mastered: true } } });
+  assert.equal(sanitized.mistakes.haus.mastered, false);
   // Ältere Speicherstände tragen noch lastWrong — das Feld wird stillschweigend fallen gelassen.
-  assert.equal("lastWrong" in sanitized.mistakes.Haus, false);
+  assert.equal("lastWrong" in sanitized.mistakes.haus, false);
   assert.equal("broken" in sanitized.mistakes, false);
+});
+
+test("a hostile transfer payload cannot poison the counters", () => {
+  const hostile = sanitizeData({
+    version: 1,
+    totals: { answered: "1", correct: -5, totalMs: Number.NaN, points: 7.9 },
+    best: { speedMs: "fast", score: {}, streak: 3 },
+    sprints: { completed: [], passed: 2, passStreak: null, bestCorrect: 12, bestTimeMs: -1 },
+    days: { "2026-08-09": { answered: "99", correct: 1, totalMs: 5 }, "gestern": { answered: 4, correct: 4, totalMs: 5 } },
+    mistakes: { erfundenes_wort: { wrong: 1, seen: 1 }, haus: { wrong: 2, seen: 2 } },
+  } as never);
+  assert.deepEqual(hostile.totals, { answered: 0, correct: 0, totalMs: 0, points: 7 });
+  assert.deepEqual(hostile.best, { speedMs: null, score: 0, streak: 3 });
+  // passed wird von completed gedeckelt, das hier auf 0 fällt.
+  assert.deepEqual(hostile.sprints, { completed: 0, passed: 0, passStreak: 0, bestCorrect: 12, bestTimeMs: null });
+  // Erfundene Tagesschlüssel und unbekannte Wörter fallen raus, sonst wüchse der Speicher unbegrenzt.
+  assert.deepEqual(Object.keys(hostile.days), ["2026-08-09"]);
+  assert.equal(hostile.days["2026-08-09"].answered, 0);
+  assert.deepEqual(Object.keys(hostile.mistakes), ["haus"]);
+});
+
+test("nothing unknown survives sanitising into storage", () => {
+  const smuggled = sanitizeData({
+    version: 1,
+    junk: "x".repeat(1000),
+    settings: { sound: "yes", feedbackDelay: 9_000_000, category: "life", extra: true },
+    recentMistakes: ["haus", "erfundenes_wort", 7],
+  } as never);
+  assert.deepEqual(Object.keys(smuggled).sort(), ["best", "days", "mistakes", "recentMistakes", "settings", "sprints", "theme", "totals", "version"]);
+  assert.deepEqual(Object.keys(smuggled.settings).sort(), ["category", "feedbackDelay", "installHintDismissed", "sound"]);
+  assert.equal(smuggled.settings.sound, false);
+  // Ein riesiger Wert würde sonst als Timeout die nächste Frage nie erscheinen lassen.
+  assert.equal(smuggled.settings.feedbackDelay, 3000);
+  assert.deepEqual(smuggled.recentMistakes, ["haus"]);
+});
+
+test("the daily history is capped at the newest days", () => {
+  const days: Record<string, { answered: number; correct: number; totalMs: number }> = {};
+  // Deutlich mehr als die Obergrenze, sonst prüfte der Test gar nichts.
+  let key = "2027-01-01";
+  for (let index = 0; index < 1500; index += 1) {
+    days[key] = { answered: 1, correct: 1, totalMs: 1 };
+    key = previousDay(key);
+  }
+  assert.equal(Object.keys(days).length, 1500);
+
+  const capped = sanitizeData({ version: 1, days } as never);
+  const keys = Object.keys(capped.days).sort();
+  assert.equal(keys.length, 800);
+  // Gekappt wird am älteren Ende: der jüngste Tag bleibt, der älteste fällt weg.
+  assert.equal(keys.at(-1), "2027-01-01");
+  assert.equal(keys.includes("2022-11-23"), false);
+});
+
+test("counters that build on each other cannot contradict", () => {
+  const skewed = sanitizeData({
+    version: 1,
+    totals: { answered: 1, correct: 1000, totalMs: 5, points: 5 },
+    sprints: { completed: 2, passed: 99, passStreak: 1, bestCorrect: 12, bestTimeMs: 1000 },
+    days: { "2026-08-09": { answered: 0, correct: 7, totalMs: 5 } },
+  } as never);
+  assert.equal(skewed.totals.correct, 1);
+  assert.equal(skewed.sprints.passed, 2);
+  assert.equal(skewed.days["2026-08-09"].correct, 0);
 });

@@ -9,8 +9,12 @@ import { emptyData, sanitizeData, type SprintData } from "./storage.ts";
 const GZIP_PREFIX = "ddd1:";
 const PLAIN_PREFIX = "ddd0:";
 
-/** Nur so viele Tage wandern mit, wie die Wochenansicht überhaupt zeigt. */
-export const transferDays = 14;
+/**
+ * Die Tagesserie zählt über die gesamte Historie, deshalb muss sie mitwandern —
+ * ein Deckel von zwei Wochen hätte aus einer 60-Tage-Serie beim Umzug eine
+ * 14-Tage-Serie gemacht. Zwei Jahre reichen und begrenzen die Codelänge.
+ */
+export const transferDays = 730;
 
 interface TransferPayload {
   v: 1;
@@ -49,9 +53,41 @@ function fromBase64Url(value: string): Uint8Array {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
+// Ein Fortschrittscode aus fremder Hand wird beim Öffnen eines Links sofort
+// gelesen. gzip packt gleichförmige Daten tausendfach, deshalb bekommt sowohl
+// die Eingabe als auch das entpackte Ergebnis eine harte Grenze.
+const maxCodeLength = 64_000;
+const maxDecodedBytes = 1_000_000;
+
 async function pipe(bytes: Uint8Array, transform: CompressionStream | DecompressionStream): Promise<Uint8Array> {
   const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(transform as ReadableWritablePair<Uint8Array, Uint8Array>);
   return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/** Entpackt und bricht ab, sobald die Grenze überschritten ist — ohne alles zu behalten. */
+async function inflateBounded(bytes: Uint8Array): Promise<Uint8Array | null> {
+  const stream = new Blob([bytes as BlobPart]).stream()
+    .pipeThrough(new DecompressionStream("gzip") as ReadableWritablePair<Uint8Array, Uint8Array>);
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxDecodedBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
 }
 
 export async function encodeProgress(data: SprintData): Promise<string> {
@@ -75,13 +111,15 @@ export async function encodeProgress(data: SprintData): Promise<string> {
  */
 export async function decodeProgress(code: string, current: SprintData = emptyData): Promise<SprintData | null> {
   const trimmed = code.trim();
+  if (trimmed.length > maxCodeLength) return null;
   const gzipped = trimmed.startsWith(GZIP_PREFIX);
   if (!gzipped && !trimmed.startsWith(PLAIN_PREFIX)) return null;
 
   try {
     const raw = fromBase64Url(trimmed.slice(GZIP_PREFIX.length));
     if (gzipped && typeof DecompressionStream === "undefined") return null;
-    const bytes = gzipped ? await pipe(raw, new DecompressionStream("gzip")) : raw;
+    const bytes = gzipped ? await inflateBounded(raw) : raw;
+    if (!bytes) return null;
     const payload = JSON.parse(new TextDecoder().decode(bytes)) as Partial<TransferPayload>;
     if (payload.v !== 1) return null;
     // Theme und Einstellungen gehören zum Gerät, nicht zum Lernstand.
