@@ -35,6 +35,8 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="shortcut icon" href="/favicon.svg" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/* Cloudflare Web Analytics: cookiefrei, misst nur Seitenaufrufe. Der Token ist öffentlich. */}
+        <script defer type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "51c2ec958a6146d995055263ecf49992"}' />
       </head>
       <body
         className={geistSans.variable}
