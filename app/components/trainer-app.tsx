@@ -540,8 +540,8 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
                     <span className="sr-only">Kategorie wählen</span>
                     <select value={category} onChange={(event) => changeCategory(event.target.value as CategoryId)}>
                       {nounCategories.map((item) => {
-                        // Nur die beiden Gesamtlisten brauchen einen Zusatz — sonst ist unklar, dass sie sich ergänzen.
-                        const note = item.id === "all" ? " Basiswörter" : item.id === "challenge" ? " (zusätzlich)" : "";
+                        // Die Zusatzliste braucht den Hinweis, dass sie zum Basiswortschatz hinzukommt.
+                        const note = item.id === "challenge" ? " (zusätzlich)" : "";
                         return <option value={item.id} key={item.id}>{item.label} · {nounsForCategory(item.id).length}{note}</option>;
                       })}
                     </select>

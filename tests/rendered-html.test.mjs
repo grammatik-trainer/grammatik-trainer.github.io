@@ -27,7 +27,7 @@ test("server-renders the German training application", async () => {
   assert.match(html, /Wort wird geladen/);
   assert.match(html, /app-shell/);
   assert.match(html, /local-data/);
-  assert.match(html, /Alle Wörter(?:<!-- -->)? · (?:<!-- -->)?240/);
+  assert.match(html, /Alle Basiswörter(?:<!-- -->)? · (?:<!-- -->)?240/);
   assert.match(html, /Schwer &amp; selten(?:<!-- -->)? · (?:<!-- -->)?60/);
   assert.match(html, /Sprint (?:<!-- -->)?0(?:<!-- -->)?\/(?:<!-- -->)?12/);
   assert.match(html, /Deine Session/);

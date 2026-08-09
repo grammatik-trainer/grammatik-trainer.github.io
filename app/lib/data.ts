@@ -321,7 +321,7 @@ export const allNouns = [...nouns, ...challengeNouns];
 export type CategoryId = "all" | "life" | "people" | "travel" | "nature" | "challenge";
 
 export const nounCategories: Array<{ id: CategoryId; label: string; description: string }> = [
-  { id: "all", label: "Alle Wörter", description: "Der / Die / Das · Nominativ" },
+  { id: "all", label: "Alle Basiswörter", description: "Der / Die / Das · Nominativ" },
   { id: "life", label: "Essen & Zuhause", description: "Dinge aus Küche und Wohnung" },
   { id: "people", label: "Menschen & Körper", description: "Familie, Berufe und Gesundheit" },
   { id: "travel", label: "Unterwegs & Zeit", description: "Reisen, Verkehr und Kalender" },
