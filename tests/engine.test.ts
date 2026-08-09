@@ -24,6 +24,7 @@ import {
   sprintLength,
   updateWordProgress,
 } from "../app/lib/engine.ts";
+import { hintAt, trainerHints } from "../app/lib/hints.ts";
 import { emptyData, sanitizeData } from "../app/lib/storage.ts";
 
 test("ships a large, balanced vocabulary", () => {
@@ -156,6 +157,18 @@ test("a mistake drops sprint progress to the previous checkpoint", () => {
 test("daily streak accepts today or yesterday as its anchor", () => {
   assert.equal(calculateDailyStreak({ "2026-08-04": { answered: 2 }, "2026-08-05": { answered: 3 }, "2026-08-06": { answered: 1 } }, "2026-08-06"), 3);
   assert.equal(calculateDailyStreak({ "2026-08-04": { answered: 2 }, "2026-08-05": { answered: 3 } }, "2026-08-06"), 2);
+});
+
+test("hints cycle without ever falling off the list", () => {
+  assert.ok(trainerHints.length >= 6);
+  assert.equal(hintAt(0), trainerHints[0]);
+  assert.equal(hintAt(trainerHints.length), trainerHints[0]);
+  assert.equal(hintAt(trainerHints.length + 2), trainerHints[2]);
+  assert.equal(hintAt(-1), trainerHints[trainerHints.length - 1]);
+  assert.equal(hintAt(Number.NaN), trainerHints[0]);
+  for (const item of trainerHints) {
+    assert.ok(item.headline.length > 0 && item.detail.length > 0);
+  }
 });
 
 test("invalid stored data falls back safely", () => {

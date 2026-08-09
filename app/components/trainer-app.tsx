@@ -36,6 +36,7 @@ import {
   sprintLength,
   updateWordProgress,
 } from "../lib/engine";
+import { hintAt } from "../lib/hints";
 import { emptyData, loadData, saveData, type SprintData } from "../lib/storage";
 import { routeState, trainingPath, viewPath, type TrainerView } from "../lib/routes";
 
@@ -91,6 +92,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [sprintFinished, setSprintFinished] = useState(false);
+  const [hintIndex, setHintIndex] = useState(0);
   const [category, setCategory] = useState<CategoryId>(initialCategory ?? "all");
   const pool = useMemo(() => nounsForCategory(category), [category]);
   const startedAt = useRef(0);
@@ -124,6 +126,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
       reviewQueue.current = pendingIds.map((id) => ({ id, dueAtAnswered: 0 }));
       reviewNeeds.current = Object.fromEntries(pendingIds.map((id) => [id, remainingReviewCount(restoredData.mistakes[id])]));
       setMasteredAtSprintStart(masteredWordIds(restoredData.mistakes));
+      setHintIndex(restoredData.sprints.completed);
       if (pendingIds.length) setSession({ ...emptySession, pendingReviews: pendingIds.length });
       setCurrent(pickNext(savedPool, "", restoredData.mistakes));
       startedAt.current = Date.now();
@@ -296,6 +299,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
     recentIds.current = [];
     wrongThisSprint.current = new Set();
     freshThisSprint.current = new Set();
+    setHintIndex((index) => index + 1);
     setMasteredAtSprintStart(masteredWordIds(data.mistakes));
     setSession({ ...emptySession, streak: nextSprintStreak(session.streak) });
     setSeconds(0);
@@ -436,6 +440,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
   const currentMastered = pool.filter((noun) => data.mistakes[noun.id]?.mastered).length;
   const newMasteredCount = countNewlyMastered(pool, data.mistakes, masteredAtSprintStart);
   const currentCategory = nounCategories.find((item) => item.id === category) ?? nounCategories[0];
+  const hint = hintAt(hintIndex);
   const sessionAccuracy = accuracy(session.correct, session.answered);
   const sessionAverage = session.answered ? session.totalMs / session.answered : 0;
   const totalAccuracy = accuracy(data.totals.correct, data.totals.answered);
@@ -488,7 +493,11 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
                 </div>
               </section>
 
-              <section className="focus-note"><Icon>➜</Icon><p><strong>Falsch beantwortete Wörter kommen nach 3–5 anderen Wörtern zurück.</strong><br />Zweimal richtig — dann gilt das Wort als sicher.</p></section>
+              <section className="focus-note" aria-label="Trainingshinweis">
+                <Icon>➜</Icon>
+                <p className="local-data" aria-live="polite"><strong>{hint.headline}</strong><br />{hint.detail}</p>
+                <button className="hint-next" type="button" onClick={() => setHintIndex((index) => index + 1)} aria-label="Nächster Hinweis">›</button>
+              </section>
 
               <section className="card personal-card">
                 <div className="card-heading"><h2>Bestleistung</h2></div>
