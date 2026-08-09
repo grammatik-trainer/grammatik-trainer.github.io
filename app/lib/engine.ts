@@ -46,7 +46,6 @@ export function shouldForceFreshWord(deficit: number, progress: number): boolean
 export interface MistakeStat {
   wrong: number;
   seen: number;
-  lastWrong: string;
   correctRun?: number;
   mastered?: boolean;
 }
@@ -59,16 +58,14 @@ export function cappedElapsedMs(startedAt: number, answeredAt = Date.now()): num
 export function updateWordProgress(
   stat: MistakeStat | undefined,
   correct: boolean,
-  now = new Date(),
   masteryAllowed = true,
 ): MistakeStat {
-  const previous = stat ?? { wrong: 0, seen: 0, lastWrong: "", correctRun: 0, mastered: false };
+  const previous = stat ?? { wrong: 0, seen: 0, correctRun: 0, mastered: false };
   const wrong = correct ? Math.max(0, previous.wrong - 1) : masteryTarget;
   const correctRun = correct ? Math.min(masteryTarget, (previous.correctRun ?? 0) + 1) : 0;
   return {
     seen: previous.seen + 1,
     wrong,
-    lastWrong: correct ? previous.lastWrong : now.toISOString(),
     correctRun,
     mastered: masteryAllowed && correct && wrong === 0 && correctRun >= masteryTarget,
   };

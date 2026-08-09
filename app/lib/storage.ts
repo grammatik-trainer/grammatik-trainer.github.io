@@ -77,7 +77,6 @@ function sanitizeMistakes(value: unknown): Record<string, MistakeStat> {
     mistakes[id] = {
       wrong,
       seen: nonNegativeInteger(stat.seen),
-      lastWrong: typeof stat.lastWrong === "string" ? stat.lastWrong : "",
       correctRun: nonNegativeInteger(stat.correctRun),
       mastered: stat.mastered === true && wrong === 0,
     };

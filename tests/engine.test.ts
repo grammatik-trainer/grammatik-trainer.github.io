@@ -82,9 +82,9 @@ test("two spaced correct answers master a word and a later mistake removes maste
 
 test("a word missed in the current sprint stays unsafe until the next sprint", () => {
   const wrong = updateWordProgress(undefined, false);
-  const firstReview = updateWordProgress(wrong, true, new Date(), false);
+  const firstReview = updateWordProgress(wrong, true, false);
   assert.equal(firstReview.mastered, false);
-  const secondReview = updateWordProgress(firstReview, true, new Date(), false);
+  const secondReview = updateWordProgress(firstReview, true, false);
   assert.equal(secondReview.wrong, 0);
   assert.equal(secondReview.correctRun, 2);
   assert.equal(secondReview.mastered, false);
@@ -133,7 +133,7 @@ test("a new sprint preserves the current answer streak", () => {
 
 test("newly mastered count is unique and excludes words mastered at sprint start", () => {
   const [known, learned] = nouns;
-  const knownStat = { wrong: 0, seen: 2, lastWrong: "", correctRun: 2, mastered: true };
+  const knownStat = { wrong: 0, seen: 2, correctRun: 2, mastered: true };
   const learnedStat = { ...knownStat };
   const mistakes = { [known.id]: knownStat, [learned.id]: learnedStat };
   const masteredAtStart = masteredWordIds({ [known.id]: knownStat });
@@ -175,7 +175,9 @@ test("invalid stored data falls back safely", () => {
   assert.deepEqual(sanitizeData({ version: 99 }), emptyData);
   assert.equal(sanitizeData({ version: 1, theme: "neon" }).theme, "light");
   assert.equal(sanitizeData({ version: 1, settings: { sound: false, feedbackDelay: 420, category: "unknown" as never } }).settings.category, "all");
-  const sanitized = sanitizeData({ version: 1, mistakes: { broken: null, Haus: { wrong: 1, seen: 3, lastWrong: "", mastered: true } } });
+  const sanitized = sanitizeData({ version: 1, mistakes: { broken: null, Haus: { wrong: 1, seen: 3, lastWrong: "2026-08-01", mastered: true } } });
   assert.equal(sanitized.mistakes.Haus.mastered, false);
+  // Ältere Speicherstände tragen noch lastWrong — das Feld wird stillschweigend fallen gelassen.
+  assert.equal("lastWrong" in sanitized.mistakes.Haus, false);
   assert.equal("broken" in sanitized.mistakes, false);
 });

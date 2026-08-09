@@ -273,7 +273,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
     const oldMistake = data.mistakes[current.id];
     // Ein in diesem Sprint verpasstes Wort kann erst im nächsten Sprint wieder sicher werden.
     const masteryAllowed = !wrongThisSprint.current.has(current.id);
-    const nextMistake = updateWordProgress(oldMistake, correct, new Date(answeredAt), masteryAllowed);
+    const nextMistake = updateWordProgress(oldMistake, correct, masteryAllowed);
     if (!correct) wrongThisSprint.current.add(current.id);
     const nextAnswered = session.answered + 1;
     const nextCorrect = session.correct + (correct ? 1 : 0);
