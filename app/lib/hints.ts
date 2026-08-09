@@ -10,6 +10,10 @@ export const trainerHints: TrainerHint[] = [
     detail: "Hast du es im selben Sprint verpasst, zählt es frühestens im nächsten.",
   },
   {
+    headline: "Dein Fortschritt liegt im lokalen Speicher deines Browsers.",
+    detail: "Kein Konto nötig: im selben Browser geht es weiter, auf einem anderen Gerät beginnst du neu.",
+  },
+  {
     headline: "Falsch beantwortete Wörter kommen nach 3–5 anderen Wörtern zurück.",
     detail: "So bleibt der Abstand groß genug, dass du dich wirklich erinnern musst.",
   },
@@ -40,10 +44,6 @@ export const trainerHints: TrainerHint[] = [
   {
     headline: "Kategorien wechseln den Wortschatz, nicht deinen Lernstand.",
     detail: "Jedes Wort behält seinen Fortschritt — nur der laufende Sprint beginnt neu.",
-  },
-  {
-    headline: "Schon eine Antwort pro Tag hält deine Tagesserie am Leben.",
-    detail: "Erst nach zwei Tagen ohne Antwort ist die Serie weg.",
   },
 ];
 

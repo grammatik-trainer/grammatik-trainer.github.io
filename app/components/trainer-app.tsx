@@ -637,7 +637,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
       </main>
 
       <footer className="site-footer">
-        <p>300 deutsche Substantive von A1 bis B2.</p>
+        <p>300 deutsche Substantive von A1 bis B2.<br />Kein Konto — dein Fortschritt bleibt im lokalen Speicher des Browsers.<br />Im selben Browser lernst du einfach weiter.</p>
         <nav aria-label="Trainingskategorien">
           {nounCategories.map((item) => <a key={item.id} href={trainingPath(item.id)} onClick={(event) => handleCategoryLink(event, item.id)}>{item.label}</a>)}
         </nav>
