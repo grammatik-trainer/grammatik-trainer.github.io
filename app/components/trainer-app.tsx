@@ -67,7 +67,10 @@ interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>;
 }
 
+// Auf iOS löscht Safari den Fortschritt nach etwa einer Woche ohne Besuch, auf dem
+// Startbildschirm nicht — dort ist der Hinweis eine Warnung und darf früher kommen.
 const sprintsBeforeInstallHint = 3;
+const sprintsBeforeInstallHintIos = 1;
 
 const emptySession: SessionState = { answered: 0, correct: 0, totalMs: 0, streak: 0, points: 0, progress: 0, pendingReviews: 0, freshRemaining: 0 };
 
@@ -529,7 +532,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
   // Ohne Prompt und ohne iOS-Teilen-Menü gäbe es nichts anzubieten — etwa in Desktop-Firefox.
   const installOffered = !isStandalone && (canInstall || isIos);
   const showInstallHint = ready && installOffered && !data.settings.installHintDismissed
-    && data.sprints.completed >= sprintsBeforeInstallHint;
+    && data.sprints.completed >= (isIos ? sprintsBeforeInstallHintIos : sprintsBeforeInstallHint);
   const sessionAccuracy = accuracy(session.correct, session.answered);
   const sessionAverage = session.answered ? session.totalMs / session.answered : 0;
   const totalAccuracy = accuracy(data.totals.correct, data.totals.answered);
@@ -578,7 +581,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
         {view === "training" && showInstallHint && (
           <section className="install-note local-data" aria-label="App installieren">
             <Icon>⤓</Icon>
-            <p><strong>Leg dir das Training auf den Startbildschirm.</strong><br />{canInstall ? "Ein Tippen — danach startet es ohne Browserleiste." : "Teilen → Zum Home-Bildschirm."}</p>
+            <p><strong>Leg dir das Training auf den Startbildschirm.</strong><br />{canInstall ? "Ein Tippen — danach startet es ohne Browserleiste." : "Teilen → Zum Home-Bildschirm. Nur dort bleibt dein Fortschritt dauerhaft: Safari löscht ihn nach etwa einer Woche ohne Besuch."}</p>
             {canInstall && <button className="install-button" type="button" onClick={runInstall}>Installieren</button>}
             <button className="round-button" type="button" onClick={dismissInstallHint} aria-label="Hinweis ausblenden">×</button>
           </section>
@@ -732,7 +735,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
             <label className="setting-row"><span><strong>Tempo</strong><small>Wie schnell die nächste Frage erscheint</small></span><select value={data.settings.feedbackDelay} onChange={(event) => persist({ ...data, settings: { ...data.settings, feedbackDelay: Number(event.target.value) } })}><option value="250">Schnell</option><option value="420">Normal</option><option value="700">Ruhig</option></select></label>
             {installOffered && (
               <div className="setting-row">
-                <span><strong>Zum Startbildschirm</strong><small>{canInstall ? "Als App ohne Browserleiste öffnen" : "Teilen → Zum Home-Bildschirm"}</small></span>
+                <span><strong>Zum Startbildschirm</strong><small>{canInstall ? "Als App ohne Browserleiste öffnen" : "Teilen → Zum Home-Bildschirm. Safari löscht den Fortschritt sonst nach etwa einer Woche ohne Besuch."}</small></span>
                 {canInstall && <button className="install-button" type="button" onClick={runInstall}>Installieren</button>}
               </div>
             )}

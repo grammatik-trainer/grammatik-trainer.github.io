@@ -11,7 +11,7 @@ export const trainerHints: TrainerHint[] = [
   },
   {
     headline: "Dein Fortschritt liegt im lokalen Speicher deines Browsers.",
-    detail: "Kein Konto nötig: im selben Browser geht es weiter, auf einem anderen Gerät beginnst du neu.",
+    detail: "Kein Konto nötig. Auf dem iPhone bleibt er nur erhalten, wenn du das Training auf den Startbildschirm legst.",
   },
   {
     headline: "Falsch beantwortete Wörter kommen nach 3–5 anderen Wörtern zurück.",
