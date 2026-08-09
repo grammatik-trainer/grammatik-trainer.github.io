@@ -90,6 +90,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
   const [seconds, setSeconds] = useState(0);
   const [ready, setReady] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [sprintFinished, setSprintFinished] = useState(false);
   const [hintIndex, setHintIndex] = useState(0);
@@ -105,6 +106,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
   const [masteredAtSprintStart, setMasteredAtSprintStart] = useState<Set<string>>(() => new Set());
   const nextTimer = useRef<number | null>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -154,9 +156,20 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
     saveData(next);
   }, []);
 
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false);
+    queueMicrotask(() => menuButtonRef.current?.focus());
+  }, []);
+
+  const openSettings = useCallback(() => {
+    setMenuOpen(false);
+    setSettingsOpen(true);
+  }, []);
+
   const closeSettings = useCallback(() => {
     setSettingsOpen(false);
-    queueMicrotask(() => settingsButtonRef.current?.focus());
+    // Im Menü versteckt sich der Zahnrad-Knopf, sobald das Menü zuklappt — dann trägt der Menüknopf den Fokus.
+    queueMicrotask(() => (settingsButtonRef.current?.offsetParent ? settingsButtonRef : menuButtonRef).current?.focus());
   }, []);
 
   const playTone = useCallback((correct: boolean) => {
@@ -318,6 +331,10 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
         if (event.key === "Escape") closeSettings();
         return;
       }
+      if (menuOpen) {
+        if (event.key === "Escape") closeMenu();
+        return;
+      }
       if (sprintFinished && event.key === "Enter") {
         event.preventDefault();
         startNextSprint();
@@ -334,7 +351,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [answer, closeSettings, settingsOpen, sprintFinished, startNextSprint]);
+  }, [answer, closeMenu, closeSettings, menuOpen, settingsOpen, sprintFinished, startNextSprint]);
 
   const changeTheme = () => {
     const theme = data.theme === "light" ? "dark" : "light";
@@ -379,6 +396,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
 
   const navigateView = (nextView: TrainerView) => {
     setView(nextView);
+    setMenuOpen(false);
     const path = viewPath(nextView, category);
     if (window.location.pathname !== path) router.push(path, { scroll: false });
   };
@@ -467,17 +485,23 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
           <small>Deutsch. Schnell. Sicher.</small>
         </a>
 
-        <nav aria-label="Hauptnavigation">
-          <a href={trainingPath(category)} className={view === "training" ? "active" : ""} aria-current={view === "training" ? "page" : undefined} onClick={(event) => handleViewLink(event, "training")}><Icon>ϟ</Icon>Training</a>
-          <a href="/review/" className={view === "review" ? "active" : ""} aria-current={view === "review" ? "page" : undefined} onClick={(event) => handleViewLink(event, "review")}><Icon>◎</Icon>Wiederholen</a>
-          <a href="/progress/" className={view === "progress" ? "active" : ""} aria-current={view === "progress" ? "page" : undefined} onClick={(event) => handleViewLink(event, "progress")}><Icon>▥</Icon>Fortschritt</a>
-        </nav>
+        <button ref={menuButtonRef} className="menu-toggle" type="button" onClick={() => setMenuOpen((open) => !open)} aria-label={menuOpen ? "Menü schließen" : "Menü öffnen"} aria-expanded={menuOpen} aria-controls="topbar-menu">{menuOpen ? "✕" : "☰"}</button>
 
-        <div className="header-actions">
-          <button ref={settingsButtonRef} className="round-button" type="button" onClick={() => setSettingsOpen(true)} aria-label="Einstellungen">⚙</button>
-          <button className="round-button theme-button local-data" type="button" onClick={changeTheme} aria-label={`${data.theme === "light" ? "Dunkles" : "Helles"} Farbschema aktivieren`}>{data.theme === "light" ? "☼" : "☾"}</button>
+        <div className={`topbar-menu${menuOpen ? " open" : ""}`} id="topbar-menu">
+          <nav aria-label="Hauptnavigation">
+            <a href={trainingPath(category)} className={view === "training" ? "active" : ""} aria-current={view === "training" ? "page" : undefined} onClick={(event) => handleViewLink(event, "training")}><Icon>ϟ</Icon>Training</a>
+            <a href="/review/" className={view === "review" ? "active" : ""} aria-current={view === "review" ? "page" : undefined} onClick={(event) => handleViewLink(event, "review")}><Icon>◎</Icon>Wiederholen</a>
+            <a href="/progress/" className={view === "progress" ? "active" : ""} aria-current={view === "progress" ? "page" : undefined} onClick={(event) => handleViewLink(event, "progress")}><Icon>▥</Icon>Fortschritt</a>
+          </nav>
+
+          <div className="header-actions">
+            <button ref={settingsButtonRef} className="round-button" type="button" onClick={openSettings} aria-label="Einstellungen"><span aria-hidden="true">⚙</span><span className="action-label">Einstellungen</span></button>
+            <button className="round-button theme-button local-data" type="button" onClick={changeTheme} aria-label={`${data.theme === "light" ? "Dunkles" : "Helles"} Farbschema aktivieren`}><span aria-hidden="true">{data.theme === "light" ? "☼" : "☾"}</span><span className="action-label">Farbschema</span></button>
+          </div>
         </div>
       </header>
+
+      {menuOpen && <div className="menu-backdrop" role="presentation" onMouseDown={closeMenu} />}
 
       <main id="main-content" tabIndex={-1}>
         {view === "training" && (
