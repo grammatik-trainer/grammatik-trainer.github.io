@@ -95,6 +95,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
   const recentIds = useRef<string[]>([]);
   const reviewQueue = useRef<ReviewItem[]>([]);
   const reviewNeeds = useRef<Record<string, number>>({});
+  const wrongThisSprint = useRef<Set<string>>(new Set());
   const [masteredAtSprintStart, setMasteredAtSprintStart] = useState<Set<string>>(() => new Set());
   const nextTimer = useRef<number | null>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
@@ -181,7 +182,10 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
     const today = dayKey();
     const oldDay = data.days[today] ?? { answered: 0, correct: 0, totalMs: 0 };
     const oldMistake = data.mistakes[current.id];
-    const nextMistake = updateWordProgress(oldMistake, correct, new Date(answeredAt));
+    // Ein in diesem Sprint verpasstes Wort kann erst im nächsten Sprint wieder sicher werden.
+    const masteryAllowed = !wrongThisSprint.current.has(current.id);
+    const nextMistake = updateWordProgress(oldMistake, correct, new Date(answeredAt), masteryAllowed);
+    if (!correct) wrongThisSprint.current.add(current.id);
     const nextAnswered = session.answered + 1;
     const nextCorrect = session.correct + (correct ? 1 : 0);
     const previousReviewNeed = reviewNeeds.current[current.id] ?? 0;
@@ -274,6 +278,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
 
   const startNextSprint = useCallback(() => {
     recentIds.current = [];
+    wrongThisSprint.current = new Set();
     setMasteredAtSprintStart(masteredWordIds(data.mistakes));
     setSession({ ...emptySession, streak: nextSprintStreak(session.streak) });
     setSeconds(0);
@@ -322,6 +327,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
     const nextData = { ...data, settings: { ...data.settings, category: nextCategory } };
     reviewQueue.current = [];
     reviewNeeds.current = {};
+    wrongThisSprint.current = new Set();
     setMasteredAtSprintStart(masteredWordIds(nextData.mistakes));
     recentIds.current = [];
     setCategory(nextCategory);
@@ -378,6 +384,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
     };
     reviewQueue.current = [];
     reviewNeeds.current = {};
+    wrongThisSprint.current = new Set();
     setMasteredAtSprintStart(new Set());
     recentIds.current = [];
     setSession(emptySession);

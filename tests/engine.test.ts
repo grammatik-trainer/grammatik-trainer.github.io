@@ -76,6 +76,17 @@ test("two spaced correct answers master a word and a later mistake removes maste
   assert.equal(updateWordProgress(updateWordProgress(review, true), true).mastered, true);
 });
 
+test("a word missed in the current sprint stays unsafe until the next sprint", () => {
+  const wrong = updateWordProgress(undefined, false);
+  const firstReview = updateWordProgress(wrong, true, new Date(), false);
+  assert.equal(firstReview.mastered, false);
+  const secondReview = updateWordProgress(firstReview, true, new Date(), false);
+  assert.equal(secondReview.wrong, 0);
+  assert.equal(secondReview.correctRun, 2);
+  assert.equal(secondReview.mastered, false);
+  assert.equal(updateWordProgress(secondReview, true).mastered, true);
+});
+
 test("saved review progress preserves the remaining repetition after reload", () => {
   const wrong = updateWordProgress(undefined, false);
   const reviewedOnce = updateWordProgress(wrong, true);

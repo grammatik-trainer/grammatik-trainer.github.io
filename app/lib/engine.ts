@@ -44,7 +44,12 @@ export function cappedElapsedMs(startedAt: number, answeredAt = Date.now()): num
   return Math.min(inactivityLimitMs, Math.max(100, answeredAt - startedAt));
 }
 
-export function updateWordProgress(stat: MistakeStat | undefined, correct: boolean, now = new Date()): MistakeStat {
+export function updateWordProgress(
+  stat: MistakeStat | undefined,
+  correct: boolean,
+  now = new Date(),
+  masteryAllowed = true,
+): MistakeStat {
   const previous = stat ?? { wrong: 0, seen: 0, lastWrong: "", correctRun: 0, mastered: false };
   const wrong = correct ? Math.max(0, previous.wrong - 1) : masteryTarget;
   const correctRun = correct ? Math.min(masteryTarget, (previous.correctRun ?? 0) + 1) : 0;
@@ -53,7 +58,7 @@ export function updateWordProgress(stat: MistakeStat | undefined, correct: boole
     wrong,
     lastWrong: correct ? previous.lastWrong : now.toISOString(),
     correctRun,
-    mastered: correct && wrong === 0 && correctRun >= masteryTarget,
+    mastered: masteryAllowed && correct && wrong === 0 && correctRun >= masteryTarget,
   };
 }
 
