@@ -513,7 +513,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
                   <div><Icon>◷</Icon><span>Tempo</span><strong>{formatSeconds(sessionAverage)}</strong><small>pausiert nach 10 s</small></div>
                   <div><Icon>◎</Icon><span>Genauigkeit</span><strong>{session.answered ? `${sessionAccuracy}%` : "—"}</strong><small>richtig</small></div>
                   <div><Icon>ϟ</Icon><span>Antwortserie</span><strong>{session.streak}</strong><small>richtig in Folge</small></div>
-                  <div><Icon>✓</Icon><span>Basiswörter sicher</span><strong>{masteredCount}/{nouns.length}</strong><small>insgesamt</small></div>
+                  <div><Icon>✓</Icon><span>Sichere Wörter</span><strong>{currentMastered}/{pool.length}</strong><small>{currentCategory.label}</small></div>
                 </div>
               </section>
 

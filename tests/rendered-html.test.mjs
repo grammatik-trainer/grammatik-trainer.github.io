@@ -31,7 +31,7 @@ test("server-renders the German training application", async () => {
   assert.match(html, /Schwer &amp; selten(?:<!-- -->)? · (?:<!-- -->)?60/);
   assert.match(html, /Sprint (?:<!-- -->)?0(?:<!-- -->)?\/(?:<!-- -->)?12/);
   assert.match(html, /Deine Session/);
-  assert.match(html, /Basiswörter sicher/);
+  assert.match(html, /Sichere Wörter/);
   assert.match(html, /0(?:<!-- -->)?\/(?:<!-- -->)?240/);
   assert.match(html, /Wiederholen/);
   assert.match(html, /Fortschritt/);
@@ -51,6 +51,9 @@ test("publishes crawlable category routes and keeps personal routes out of searc
   assert.match(category, /<title>Schwer &amp; selten — Der Die Das Sprint<\/title>/);
   assert.match(category, /rel="canonical" href="http:\/\/localhost:3000\/training\/challenge\/"/);
   assert.match(category, /60 zusätzliche Wörter/);
+  // Die Sitzungsstatistik zaehlt die gewaehlte Kategorie, nicht immer den Basiswortschatz.
+  assert.match(category, /Sichere Wörter<\/span><strong>0(?:<!-- -->)?\/(?:<!-- -->)?60<\/strong>/);
+  assert.doesNotMatch(category, /Sichere Wörter<\/span><strong>0(?:<!-- -->)?\/(?:<!-- -->)?240<\/strong>/);
   const review = await (await render("/review/")).text();
   assert.match(review, /Deine schwierigen Wörter/);
   assert.match(review, /rel="canonical" href="http:\/\/localhost:3000\/review\//);
