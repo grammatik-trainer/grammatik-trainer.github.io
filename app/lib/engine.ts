@@ -5,6 +5,7 @@ export const wrongAnswerExtraDelayMs = 1000;
 export const sprintLength = 12;
 export const inactivityLimitMs = 10_000;
 export const masteryTarget = 2;
+export const minimumFreshPerSprint = 3;
 export const minimumRepeatGap = 3;
 export const maximumRepeatGap = 5;
 
@@ -29,6 +30,17 @@ export function nextSprintStreak(streak: number): number {
 export function nextSprintProgress(progress: number, correct: boolean, hasPendingReviews: boolean): number {
   if (!correct) return Math.max(0, Math.floor((Math.max(0, progress) - 1) / 4) * 4);
   return Math.min(hasPendingReviews ? sprintLength - 1 : sprintLength, Math.max(0, progress) + 1);
+}
+
+/** Wie viele noch unsichere Wörter dem Sprint bis zur Mindestquote fehlen. */
+export function freshQuotaDeficit(freshSeen: number, availableFresh: number): number {
+  const target = Math.min(minimumFreshPerSprint, Math.max(0, Math.floor(availableFresh)));
+  return Math.max(0, target - Math.max(0, Math.floor(freshSeen)));
+}
+
+/** Ab wann der Sprint gezielt unsichere Wörter nachziehen muss, statt frei zu würfeln. */
+export function shouldForceFreshWord(deficit: number, progress: number): boolean {
+  return deficit > 0 && sprintLength - Math.max(0, progress) <= deficit;
 }
 
 export interface MistakeStat {

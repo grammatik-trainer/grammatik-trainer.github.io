@@ -21,6 +21,7 @@ import {
   dayKey,
   feedbackDelay,
   formatSeconds,
+  freshQuotaDeficit,
   inactivityLimitMs,
   masteredWordIds,
   minimumRepeatGap,
@@ -31,6 +32,7 @@ import {
   reviewIsDue,
   scheduleReviewAt,
   scoreAnswer,
+  shouldForceFreshWord,
   sprintLength,
   updateWordProgress,
 } from "../lib/engine";
@@ -45,6 +47,7 @@ interface SessionState {
   points: number;
   progress: number;
   pendingReviews: number;
+  freshRemaining: number;
 }
 
 interface Feedback {
@@ -58,7 +61,7 @@ interface ReviewItem {
   dueAtAnswered: number;
 }
 
-const emptySession: SessionState = { answered: 0, correct: 0, totalMs: 0, streak: 0, points: 0, progress: 0, pendingReviews: 0 };
+const emptySession: SessionState = { answered: 0, correct: 0, totalMs: 0, streak: 0, points: 0, progress: 0, pendingReviews: 0, freshRemaining: 0 };
 
 function Icon({ children }: { children: React.ReactNode }) {
   return <span className="icon" aria-hidden="true">{children}</span>;
@@ -96,6 +99,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
   const reviewQueue = useRef<ReviewItem[]>([]);
   const reviewNeeds = useRef<Record<string, number>>({});
   const wrongThisSprint = useRef<Set<string>>(new Set());
+  const freshThisSprint = useRef<Set<string>>(new Set());
   const [masteredAtSprintStart, setMasteredAtSprintStart] = useState<Set<string>>(() => new Set());
   const nextTimer = useRef<number | null>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
@@ -204,7 +208,13 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
     }
     const hasPendingReviews = Object.values(reviewNeeds.current).some((remaining) => remaining > 0);
     const pendingReviews = Object.values(reviewNeeds.current).filter((remaining) => remaining > 0).length;
-    const progress = nextSprintProgress(session.progress, correct, hasPendingReviews);
+    // Jeder Sprint muss mindestens drei noch unsichere Wörter zeigen, solange es sie gibt.
+    if (!oldMistake?.mastered) freshThisSprint.current.add(current.id);
+    const nextMistakes = { ...data.mistakes, [current.id]: nextMistake };
+    // Die Quote zählt gegen den Sprintstart — sonst senkt jedes neu gemeisterte Wort das eigene Ziel.
+    const availableFresh = pool.filter((noun) => !masteredAtSprintStart.has(noun.id)).length;
+    const freshDeficit = freshQuotaDeficit(freshThisSprint.current.size, availableFresh);
+    const progress = nextSprintProgress(session.progress, correct, hasPendingReviews || freshDeficit > 0);
     const nextSession = {
       answered: nextAnswered,
       correct: nextCorrect,
@@ -213,8 +223,9 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
       points: session.points + points,
       progress,
       pendingReviews,
+      freshRemaining: freshDeficit,
     };
-    const completesSprint = progress >= sprintLength && !hasPendingReviews;
+    const completesSprint = progress >= sprintLength && !hasPendingReviews && freshDeficit === 0;
     const nextData: SprintData = {
       ...data,
       totals: {
@@ -245,7 +256,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
           totalMs: oldDay.totalMs + elapsedMs,
         },
       },
-      mistakes: { ...data.mistakes, [current.id]: nextMistake },
+      mistakes: nextMistakes,
       recentMistakes: correct && nextMistake.wrong === 0
         ? data.recentMistakes.filter((id) => id !== current.id)
         : correct
@@ -269,16 +280,22 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
       const blocked = new Set(recentIds.current);
       const reviewIndex = reviewQueue.current.findIndex((item) => reviewIsDue(item.dueAtAnswered, nextSession.answered) && item.id !== current.id && !blocked.has(item.id));
       const reviewItem = reviewIndex >= 0 ? reviewQueue.current.splice(reviewIndex, 1)[0] : null;
-      const freshPool = pool.filter((noun) => !reviewNeeds.current[noun.id]);
-      setCurrent((reviewItem && nounById.get(reviewItem.id)) || pickNext(freshPool.length ? freshPool : pool, current.id, nextData.mistakes, Math.random, recentIds.current));
+      const duePool = pool.filter((noun) => !reviewNeeds.current[noun.id]);
+      const basePool = duePool.length ? duePool : pool;
+      const unmastered = basePool.filter((noun) => !nextMistakes[noun.id]?.mastered);
+      // Ein Quotenpool, der nur das gerade beantwortete Wort enthält, würde es sofort wiederholen.
+      const quotaUsable = unmastered.some((noun) => noun.id !== current.id);
+      const quotaPool = shouldForceFreshWord(freshDeficit, progress) && quotaUsable ? unmastered : basePool;
+      setCurrent((reviewItem && nounById.get(reviewItem.id)) || pickNext(quotaPool, current.id, nextData.mistakes, Math.random, recentIds.current));
       startedAt.current = Date.now();
       lastActiveAt.current = Date.now();
     }, feedbackDelay(nextData.settings.feedbackDelay, correct));
-  }, [current, data, feedback, persist, playTone, pool, ready, session, sprintFinished, view]);
+  }, [current, data, feedback, masteredAtSprintStart, persist, playTone, pool, ready, session, sprintFinished, view]);
 
   const startNextSprint = useCallback(() => {
     recentIds.current = [];
     wrongThisSprint.current = new Set();
+    freshThisSprint.current = new Set();
     setMasteredAtSprintStart(masteredWordIds(data.mistakes));
     setSession({ ...emptySession, streak: nextSprintStreak(session.streak) });
     setSeconds(0);
@@ -328,6 +345,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
     reviewQueue.current = [];
     reviewNeeds.current = {};
     wrongThisSprint.current = new Set();
+    freshThisSprint.current = new Set();
     setMasteredAtSprintStart(masteredWordIds(nextData.mistakes));
     recentIds.current = [];
     setCategory(nextCategory);
@@ -385,6 +403,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
     reviewQueue.current = [];
     reviewNeeds.current = {};
     wrongThisSprint.current = new Set();
+    freshThisSprint.current = new Set();
     setMasteredAtSprintStart(new Set());
     recentIds.current = [];
     setSession(emptySession);
@@ -536,7 +555,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
                 </>
               )}
               <div className="sprint-progress" aria-label={`Sprint-Fortschritt: ${session.progress} von ${sprintLength}`} role="progressbar" aria-valuemin={0} aria-valuemax={sprintLength} aria-valuenow={session.progress}>
-                <div className="local-data"><span>Sprint {session.progress}/{sprintLength}</span><strong>{session.pendingReviews ? `${session.pendingReviews} im Wiederholen` : `${currentMastered}/${pool.length} sicher`}</strong></div>
+                <div className="local-data"><span>Sprint {session.progress}/{sprintLength}</span><strong>{session.pendingReviews ? `${session.pendingReviews} im Wiederholen` : session.freshRemaining ? `${session.freshRemaining} ${session.freshRemaining === 1 ? "unsicheres Wort" : "unsichere Wörter"} offen` :`${currentMastered}/${pool.length} sicher`}</strong></div>
                 <span className="sprint-progress-track"><i style={{ width: `${(session.progress / sprintLength) * 100}%` }} /></span>
               </div>
             </section>

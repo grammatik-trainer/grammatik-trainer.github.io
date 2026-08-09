@@ -7,8 +7,10 @@ import {
   cappedElapsedMs,
   countNewlyMastered,
   feedbackDelay,
+  freshQuotaDeficit,
   masteredWordIds,
   maximumRepeatGap,
+  minimumFreshPerSprint,
   minimumRepeatGap,
   nextSprintStreak,
   nextSprintProgress,
@@ -18,6 +20,7 @@ import {
   reviewIsDue,
   scheduleReviewAt,
   scoreAnswer,
+  shouldForceFreshWord,
   sprintLength,
   updateWordProgress,
 } from "../app/lib/engine.ts";
@@ -92,6 +95,24 @@ test("saved review progress preserves the remaining repetition after reload", ()
   const reviewedOnce = updateWordProgress(wrong, true);
   assert.equal(remainingReviewCount(wrong), 2);
   assert.equal(remainingReviewCount(reviewedOnce), 1);
+});
+
+test("every sprint owes at least three unsafe words, capped by what the pool still offers", () => {
+  assert.equal(freshQuotaDeficit(0, 240), minimumFreshPerSprint);
+  assert.equal(freshQuotaDeficit(2, 240), 1);
+  assert.equal(freshQuotaDeficit(3, 240), 0);
+  assert.equal(freshQuotaDeficit(5, 240), 0);
+  // Ein fast fertiger Pool kann die volle Quote nicht mehr liefern und darf den Sprint nicht blockieren.
+  assert.equal(freshQuotaDeficit(1, 2), 1);
+  assert.equal(freshQuotaDeficit(0, 0), 0);
+});
+
+test("unsafe words are forced in only once the sprint would otherwise end without them", () => {
+  assert.equal(shouldForceFreshWord(0, 11), false);
+  assert.equal(shouldForceFreshWord(3, 8), false);
+  assert.equal(shouldForceFreshWord(3, 9), true);
+  assert.equal(shouldForceFreshWord(1, 11), true);
+  assert.equal(shouldForceFreshWord(2, 12), true);
 });
 
 test("mistake reviews use a random gap from three to five questions", () => {
