@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { TrainerApp } from "../components/trainer-app";
 
 export const metadata: Metadata = {
   title: "Wiederholen — Der Die Das Sprint",
@@ -9,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function ReviewPage() {
-  return <TrainerApp initialView="review" />;
+  return null;
 }

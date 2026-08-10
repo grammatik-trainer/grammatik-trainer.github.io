@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { TrainerApp } from "../../components/trainer-app";
 import { isCategoryId, nounCategories, nounsForCategory } from "../../lib/data";
 import { trainingPath } from "../../lib/routes";
 import { resolveMetadataOrigin } from "../../lib/site-origin";
@@ -33,5 +32,5 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
 export default async function CategoryPage({ params }: CategoryPageProps) {
   const category = (await params).category;
   if (!isCategoryId(category) || category === "all") notFound();
-  return <TrainerApp initialView="training" initialCategory={category} />;
+  return null;
 }

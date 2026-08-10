@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { TrainerApp } from "../components/trainer-app";
 
 export const metadata: Metadata = {
   title: "Fortschritt — Der Die Das Sprint",
@@ -9,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function ProgressPage() {
-  return <TrainerApp initialView="progress" />;
+  return null;
 }

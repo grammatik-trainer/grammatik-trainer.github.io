@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { useRouter } from "next/navigation";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import {
   challengeNouns,
   nounById,
@@ -90,9 +90,13 @@ function formatClock(seconds: number) {
   return `${minutes}:${(seconds % 60).toString().padStart(2, "0")}`;
 }
 
-export function TrainerApp({ initialView = "training", initialCategory }: { initialView?: TrainerView; initialCategory?: CategoryId }) {
+export function TrainerApp() {
   const router = useRouter();
-  const [view, setView] = useState<TrainerView>(initialView);
+  const pathname = usePathname();
+  const [initialRoute] = useState(() => ({ pathname, state: routeState(pathname) }));
+  const initialCategory = initialRoute.pathname === "/" ? undefined : initialRoute.state?.category;
+  const initialView = initialRoute.state?.view ?? "training";
+  const view = routeState(pathname)?.view ?? "training";
   const [data, setData] = useState<SprintData>(emptyData);
   const [session, setSession] = useState<SessionState>(emptySession);
   const [current, setCurrent] = useState<Noun>(() => nounsForCategory(initialCategory ?? "all")[0] ?? nouns[0]);
@@ -141,8 +145,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
       const savedPool = nounsForCategory(restoredCategory);
       const poolIds = new Set(savedPool.map((noun) => noun.id));
       setHintIndex(restoredData.sprints.completed);
-      // Jede Ansicht ist eine eigene Route: nach "Wiederholen" und zurück beginnt die
-      // Komponente von vorn — der laufende Sprint kommt deshalb aus dem Speicher zurück.
+      // Der laufende Sprint überlebt auch einen vollständigen Reload.
       const openSprint = loadActiveSprint();
       const resumedWord = openSprint && openSprint.category === restoredCategory ? nounById.get(openSprint.currentId) : undefined;
       if (openSprint && resumedWord && poolIds.has(resumedWord.id)) {
@@ -517,18 +520,17 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
   }, [data, persist, router]);
 
   useEffect(() => {
-    const handlePopState = () => {
-      const next = routeState(window.location.pathname);
-      if (!next) return;
-      setView(next.view);
-      if (next.category && next.category !== category) changeCategory(next.category, "none");
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, [category, changeCategory]);
+    const next = routeState(pathname);
+    if (!next) return;
+    if (!next.category || next.category === category) return;
+    if (pathname === "/") {
+      router.replace(trainingPath(category), { scroll: false });
+      return;
+    }
+    startTransition(() => changeCategory(next.category!, "none"));
+  }, [category, changeCategory, pathname, router]);
 
   const navigateView = (nextView: TrainerView) => {
-    setView(nextView);
     setMenuOpen(false);
     const path = viewPath(nextView, category);
     if (window.location.pathname !== path) router.push(path, { scroll: false });
@@ -543,7 +545,6 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
   const handleCategoryLink = (event: MouseEvent<HTMLAnchorElement>, nextCategory: CategoryId) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    setView("training");
     if (nextCategory === category) navigateView("training");
     else changeCategory(nextCategory);
   };

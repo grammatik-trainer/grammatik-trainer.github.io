@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
+import { TrainerApp } from "./components/trainer-app";
 import { siteOrigin } from "./lib/site-origin";
 import "./globals.css";
 
@@ -49,6 +50,7 @@ export default function RootLayout({
       <body
         className={geistSans.variable}
       >
+        <TrainerApp />
         {children}
       </body>
     </html>

@@ -119,7 +119,14 @@ test("publishes a correctly sized social card", async () => {
 
 test("uses framework navigation so route metadata and robots stay synchronized", async () => {
   const component = await readFile(new URL("../app/components/trainer-app.tsx", import.meta.url), "utf8");
+  const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
+  const review = await readFile(new URL("../app/review/page.tsx", import.meta.url), "utf8");
+  const progress = await readFile(new URL("../app/progress/page.tsx", import.meta.url), "utf8");
   assert.match(component, /router\.push\(path/);
   assert.match(component, /router\.replace\(trainingPath\(restoredCategory\)/);
+  assert.match(component, /usePathname/);
+  assert.match(layout, /<TrainerApp\s*\/>/);
+  assert.doesNotMatch(review, /TrainerApp/);
+  assert.doesNotMatch(progress, /TrainerApp/);
   assert.doesNotMatch(component, /history\.(?:pushState|replaceState)/);
 });
