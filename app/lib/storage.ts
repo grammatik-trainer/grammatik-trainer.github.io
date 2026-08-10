@@ -1,5 +1,6 @@
 import type { MistakeStat } from "./engine";
 // Laufzeitimport statt reinem Typimport — deshalb mit Endung, damit Node die Tests direkt ausführen kann.
+import { sprintLength } from "./engine.ts";
 import { nounById, type CategoryId } from "./data.ts";
 
 const categoryIds = new Set<CategoryId>(["all", "life", "people", "travel", "nature", "challenge"]);
@@ -24,6 +25,13 @@ export interface SprintStat {
   bestTimeMs: number | null;
 }
 
+/** Ein abgeschlossener Sprint — daraus entstehen Tempo und Genauigkeit pro Sprint. */
+export interface SprintRun {
+  answered: number;
+  correct: number;
+  totalMs: number;
+}
+
 export interface SprintData {
   version: 1;
   theme: Theme;
@@ -45,6 +53,7 @@ export interface SprintData {
     streak: number;
   };
   sprints: SprintStat;
+  sprintRuns: SprintRun[];
   days: Record<string, DayStat>;
   mistakes: Record<string, MistakeStat>;
   recentMistakes: string[];
@@ -59,6 +68,7 @@ export const emptyData: SprintData = {
   totals: { answered: 0, correct: 0, totalMs: 0, points: 0 },
   best: { speedMs: null, score: 0, streak: 0 },
   sprints: { completed: 0, passed: 0, passStreak: 0, bestCorrect: 0, bestTimeMs: null },
+  sprintRuns: [],
   days: {},
   mistakes: {},
   recentMistakes: [],
@@ -117,6 +127,29 @@ function sanitizeDays(value: unknown): Record<string, DayStat> {
   return Object.fromEntries(entries.slice(0, maxStoredDays));
 }
 
+// Wie die Tageshistorie wächst auch die Sprintliste sonst unbegrenzt — die Diagramme
+// zeigen ohnehin nur die letzten Sprints.
+export const maxStoredSprints = 100;
+
+function sanitizeSprintRuns(value: unknown): SprintRun[] {
+  if (!Array.isArray(value)) return [];
+  const runs: SprintRun[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const run = raw as Partial<SprintRun>;
+    const answered = nonNegativeInteger(run.answered);
+    // Ohne Antworten gäbe es weder Tempo noch Genauigkeit — so ein Eintrag wäre eine Lücke im Diagramm.
+    if (answered === 0) continue;
+    runs.push({
+      answered,
+      correct: Math.min(answered, nonNegativeInteger(run.correct)),
+      totalMs: nonNegativeInteger(run.totalMs),
+    });
+  }
+  // Gekappt wird am älteren Ende, damit die jüngsten Sprints im Diagramm bleiben.
+  return runs.slice(-maxStoredSprints);
+}
+
 export function sanitizeData(value: unknown): SprintData {
   if (!value || typeof value !== "object") return structuredClone(emptyData);
   const candidate = value as Partial<SprintData>;
@@ -157,12 +190,95 @@ export function sanitizeData(value: unknown): SprintData {
       bestCorrect: nonNegativeInteger(candidate.sprints?.bestCorrect),
       bestTimeMs: optionalMilliseconds(candidate.sprints?.bestTimeMs),
     },
+    sprintRuns: sanitizeSprintRuns(candidate.sprintRuns),
     days: sanitizeDays(candidate.days),
     mistakes,
     recentMistakes: Array.isArray(candidate.recentMistakes)
       ? candidate.recentMistakes.filter((id): id is string => typeof id === "string" && nounById.has(id)).slice(0, 12)
       : [],
   };
+}
+
+/**
+ * Der laufende Sprint. Jede Ansicht ist eine eigene Route, also wird die Komponente
+ * beim Wechsel zu "Wiederholen" neu aufgebaut — ohne diese Momentaufnahme wären
+ * Tempo, Genauigkeit und Sprintfortschritt danach weg, genau wie nach einem Neuladen.
+ */
+export interface ActiveSprint {
+  category: CategoryId;
+  answered: number;
+  correct: number;
+  totalMs: number;
+  streak: number;
+  points: number;
+  progress: number;
+  seconds: number;
+  currentId: string;
+  finished: boolean;
+  wrongIds: string[];
+  freshIds: string[];
+  masteredAtStart: string[];
+  recentIds: string[];
+  reviews: Array<{ id: string; remaining: number; dueAtAnswered: number }>;
+}
+
+export const ACTIVE_KEY = "ddd-sprint:active:v1";
+
+function knownIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  // Der Deckel ist das Wörterbuch selbst: mehr verschiedene Wörter kann ein Sprint nicht berühren.
+  return value.filter((id): id is string => typeof id === "string" && nounById.has(id)).slice(0, nounById.size);
+}
+
+export function sanitizeActiveSprint(value: unknown): ActiveSprint | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const candidate = value as Partial<ActiveSprint>;
+  if (!isStoredCategory(candidate.category)) return null;
+  // Ohne gültiges aktuelles Wort gäbe es keine Frage, an der der Sprint weiterliefe.
+  if (typeof candidate.currentId !== "string" || !nounById.has(candidate.currentId)) return null;
+  const answered = nonNegativeInteger(candidate.answered);
+  return {
+    category: candidate.category,
+    answered,
+    correct: Math.min(answered, nonNegativeInteger(candidate.correct)),
+    totalMs: nonNegativeInteger(candidate.totalMs),
+    streak: nonNegativeInteger(candidate.streak),
+    points: nonNegativeInteger(candidate.points),
+    // Ein zu großer Fortschritt würde den Sprint sofort als geschafft zählen.
+    progress: Math.min(sprintLength, nonNegativeInteger(candidate.progress)),
+    seconds: nonNegativeInteger(candidate.seconds),
+    currentId: candidate.currentId,
+    finished: candidate.finished === true,
+    wrongIds: knownIds(candidate.wrongIds),
+    freshIds: knownIds(candidate.freshIds),
+    masteredAtStart: knownIds(candidate.masteredAtStart),
+    recentIds: knownIds(candidate.recentIds),
+    reviews: Array.isArray(candidate.reviews)
+      ? candidate.reviews
+        .filter((item): item is ActiveSprint["reviews"][number] => Boolean(item) && typeof item === "object" && typeof item.id === "string" && nounById.has(item.id))
+        .map((item) => ({ id: item.id, remaining: Math.min(2, nonNegativeInteger(item.remaining)), dueAtAnswered: nonNegativeInteger(item.dueAtAnswered) }))
+        .filter((item) => item.remaining > 0)
+        .slice(0, nounById.size)
+      : [],
+  };
+}
+
+export function loadActiveSprint(): ActiveSprint | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(ACTIVE_KEY);
+    return raw ? sanitizeActiveSprint(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveActiveSprint(sprint: ActiveSprint): void {
+  try {
+    localStorage.setItem(ACTIVE_KEY, JSON.stringify(sprint));
+  } catch {
+    // Wie beim Lernstand: voller Speicher darf das Training nicht abbrechen.
+  }
 }
 
 export function loadData(): SprintData {

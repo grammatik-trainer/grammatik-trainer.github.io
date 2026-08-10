@@ -37,7 +37,7 @@ import {
   updateWordProgress,
 } from "../lib/engine";
 import { hintAt } from "../lib/hints";
-import { emptyData, loadData, saveData, type SprintData } from "../lib/storage";
+import { emptyData, loadActiveSprint, loadData, maxStoredSprints, saveActiveSprint, saveData, type SprintData } from "../lib/storage";
 import { routeState, trainingPath, viewPath, type TrainerView } from "../lib/routes";
 
 interface SessionState {
@@ -112,6 +112,8 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
   const pool = useMemo(() => nounsForCategory(category), [category]);
   const startedAt = useRef(0);
   const lastActiveAt = useRef(0);
+  // Die Sprintuhr tickt jede Sekunde — als Ref landet sie in der Momentaufnahme, ohne sie jede Sekunde zu schreiben.
+  const secondsRef = useRef(0);
   const recentIds = useRef<string[]>([]);
   const reviewQueue = useRef<ReviewItem[]>([]);
   const reviewNeeds = useRef<Record<string, number>>({});
@@ -138,13 +140,42 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
       }
       const savedPool = nounsForCategory(restoredCategory);
       const poolIds = new Set(savedPool.map((noun) => noun.id));
-      const pendingIds = restoredData.recentMistakes.filter((id) => poolIds.has(id) && remainingReviewCount(restoredData.mistakes[id]) > 0);
-      reviewQueue.current = pendingIds.map((id) => ({ id, dueAtAnswered: 0 }));
-      reviewNeeds.current = Object.fromEntries(pendingIds.map((id) => [id, remainingReviewCount(restoredData.mistakes[id])]));
-      setMasteredAtSprintStart(masteredWordIds(restoredData.mistakes));
       setHintIndex(restoredData.sprints.completed);
-      if (pendingIds.length) setSession({ ...emptySession, pendingReviews: pendingIds.length });
-      setCurrent(pickNext(savedPool, "", restoredData.mistakes));
+      // Jede Ansicht ist eine eigene Route: nach "Wiederholen" und zurück beginnt die
+      // Komponente von vorn — der laufende Sprint kommt deshalb aus dem Speicher zurück.
+      const openSprint = loadActiveSprint();
+      const resumedWord = openSprint && openSprint.category === restoredCategory ? nounById.get(openSprint.currentId) : undefined;
+      if (openSprint && resumedWord && poolIds.has(resumedWord.id)) {
+        reviewQueue.current = openSprint.reviews.map((item) => ({ id: item.id, dueAtAnswered: item.dueAtAnswered }));
+        reviewNeeds.current = Object.fromEntries(openSprint.reviews.map((item) => [item.id, item.remaining]));
+        wrongThisSprint.current = new Set(openSprint.wrongIds);
+        freshThisSprint.current = new Set(openSprint.freshIds);
+        recentIds.current = openSprint.recentIds.slice(-minimumRepeatGap);
+        const masteredAtStart = new Set(openSprint.masteredAtStart);
+        setMasteredAtSprintStart(masteredAtStart);
+        const availableFresh = savedPool.filter((noun) => !masteredAtStart.has(noun.id)).length;
+        setSession({
+          answered: openSprint.answered,
+          correct: openSprint.correct,
+          totalMs: openSprint.totalMs,
+          streak: openSprint.streak,
+          points: openSprint.points,
+          progress: openSprint.progress,
+          pendingReviews: openSprint.reviews.length,
+          freshRemaining: freshQuotaDeficit(freshThisSprint.current.size, availableFresh),
+        });
+        setSeconds(openSprint.seconds);
+        secondsRef.current = openSprint.seconds;
+        setSprintFinished(openSprint.finished);
+        setCurrent(resumedWord);
+      } else {
+        const pendingIds = restoredData.recentMistakes.filter((id) => poolIds.has(id) && remainingReviewCount(restoredData.mistakes[id]) > 0);
+        reviewQueue.current = pendingIds.map((id) => ({ id, dueAtAnswered: 0 }));
+        reviewNeeds.current = Object.fromEntries(pendingIds.map((id) => [id, remainingReviewCount(restoredData.mistakes[id])]));
+        setMasteredAtSprintStart(masteredWordIds(restoredData.mistakes));
+        if (pendingIds.length) setSession({ ...emptySession, pendingReviews: pendingIds.length });
+        setCurrent(pickNext(savedPool, "", restoredData.mistakes));
+      }
       startedAt.current = Date.now();
       lastActiveAt.current = Date.now();
       setReady(true);
@@ -160,6 +191,35 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
     }, 1000);
     return () => window.clearInterval(interval);
   }, [sprintFinished, view]);
+
+  useEffect(() => {
+    secondsRef.current = seconds;
+  }, [seconds]);
+
+  // Nach jeder Antwort, jedem neuen Wort und jedem Sprintende wandert der Stand in den
+  // Speicher — die Refs sind zu diesem Zeitpunkt bereits aktualisiert.
+  useEffect(() => {
+    if (!ready) return;
+    saveActiveSprint({
+      category,
+      answered: session.answered,
+      correct: session.correct,
+      totalMs: session.totalMs,
+      streak: session.streak,
+      points: session.points,
+      progress: session.progress,
+      seconds: secondsRef.current,
+      currentId: current.id,
+      finished: sprintFinished,
+      wrongIds: [...wrongThisSprint.current],
+      freshIds: [...freshThisSprint.current],
+      masteredAtStart: [...masteredAtSprintStart],
+      recentIds: recentIds.current,
+      reviews: Object.entries(reviewNeeds.current)
+        .filter(([, remaining]) => remaining > 0)
+        .map(([id, remaining]) => ({ id, remaining, dueAtAnswered: reviewQueue.current.find((item) => item.id === id)?.dueAtAnswered ?? 0 })),
+    });
+  }, [category, current.id, masteredAtSprintStart, ready, session, sprintFinished]);
 
   useEffect(() => () => {
     if (nextTimer.current !== null) window.clearTimeout(nextTimer.current);
@@ -333,6 +393,10 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
           ? nextSession.totalMs
           : data.sprints.bestTimeMs,
       } : data.sprints,
+      // Die Sitzungswerte werden beim nächsten Sprint zurückgesetzt — hier bleiben sie für die Diagramme erhalten.
+      sprintRuns: completesSprint
+        ? [...data.sprintRuns, { answered: nextSession.answered, correct: nextSession.correct, totalMs: nextSession.totalMs }].slice(-maxStoredSprints)
+        : data.sprintRuns,
       days: {
         ...data.days,
         [today]: {
@@ -523,6 +587,18 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
     return { key, label: new Intl.DateTimeFormat("de-DE", { weekday: "short" }).format(date).slice(0, 2), value: data.days[key]?.answered ?? 0 };
   }), [data.days]);
   const maxDay = Math.max(1, ...week.map((day) => day.value));
+
+  // Mehr als ein Dutzend Balken werden auf dem Telefon zu Streifen.
+  const sprintChart = useMemo(() => {
+    const shown = data.sprintRuns.slice(-12);
+    const firstNumber = data.sprintRuns.length - shown.length + 1;
+    return shown.map((run, index) => ({
+      key: firstNumber + index,
+      averageMs: run.totalMs / run.answered,
+      accuracy: accuracy(run.correct, run.answered),
+    }));
+  }, [data.sprintRuns]);
+  const maxSprintAverage = Math.max(1, ...sprintChart.map((run) => run.averageMs));
   const dailyStreak = calculateDailyStreak(data.days);
   const masteredCount = nouns.filter((noun) => data.mistakes[noun.id]?.mastered).length;
   const challengeMastered = challengeNouns.filter((noun) => data.mistakes[noun.id]?.mastered).length;
@@ -719,6 +795,12 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
               <article className="card summary-card"><Icon>⚑</Icon><span>Sprints geschafft</span><strong>{data.sprints.passed}</strong></article>
             </div>
             <article className="card large-chart-card local-data"><div className="card-heading"><h2>Letzte sieben Tage</h2><span className="pill">Antworten</span></div><div className="large-chart">{week.map((day) => <div key={day.key}><strong>{day.value || ""}</strong><span><i style={{ height: `${Math.max(day.value ? 12 : 2, (day.value / maxDay) * 100)}%` }} /></span><small>{day.label}</small></div>)}</div></article>
+            {sprintChart.length > 0 && (
+              <>
+                <article className="card large-chart-card local-data"><div className="card-heading"><h2>Tempo pro Sprint</h2><span className="pill">Ø Sekunden je Antwort</span></div><div className="large-chart">{sprintChart.map((run) => <div key={run.key}><strong>{(run.averageMs / 1000).toFixed(1)}</strong><span><i style={{ height: `${Math.max(12, (run.averageMs / maxSprintAverage) * 100)}%` }} /></span><small>{run.key}</small></div>)}</div></article>
+                <article className="card large-chart-card local-data"><div className="card-heading"><h2>Genauigkeit pro Sprint</h2><span className="pill">% richtig</span></div><div className="large-chart">{sprintChart.map((run) => <div key={run.key}><strong>{run.accuracy}</strong><span><i style={{ height: `${Math.max(2, run.accuracy)}%` }} /></span><small>{run.key}</small></div>)}</div></article>
+              </>
+            )}
             <article className="card reference-card"><div><span>Mini-Spickzettel</span><h2>Das Grundmuster</h2></div><div><b className="tag tag-der">der</b><span>häufig: -er, -en, -ig, -ling</span></div><div><b className="tag tag-die">die</b><span>häufig: -ung, -heit, -keit, -schaft</span></div><div><b className="tag tag-das">das</b><span>häufig: -chen, -lein, -ment, -um</span></div></article>
           </section>
         )}

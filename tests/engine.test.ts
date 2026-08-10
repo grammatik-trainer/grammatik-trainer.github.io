@@ -26,7 +26,7 @@ import {
   updateWordProgress,
 } from "../app/lib/engine.ts";
 import { hintAt, trainerHints } from "../app/lib/hints.ts";
-import { emptyData, sanitizeData } from "../app/lib/storage.ts";
+import { emptyData, maxStoredSprints, sanitizeActiveSprint, sanitizeData } from "../app/lib/storage.ts";
 
 test("ships a large, balanced vocabulary", () => {
   assert.equal(nouns.length, 240);
@@ -209,7 +209,7 @@ test("nothing unknown survives sanitising into storage", () => {
     settings: { sound: "yes", feedbackDelay: 9_000_000, category: "life", extra: true },
     recentMistakes: ["haus", "erfundenes_wort", 7],
   } as never);
-  assert.deepEqual(Object.keys(smuggled).sort(), ["best", "days", "mistakes", "recentMistakes", "settings", "sprints", "theme", "totals", "version"]);
+  assert.deepEqual(Object.keys(smuggled).sort(), ["best", "days", "mistakes", "recentMistakes", "settings", "sprintRuns", "sprints", "theme", "totals", "version"]);
   assert.deepEqual(Object.keys(smuggled.settings).sort(), ["category", "feedbackDelay", "installHintDismissed", "sound"]);
   assert.equal(smuggled.settings.sound, false);
   // Ein riesiger Wert würde sonst als Timeout die nächste Frage nie erscheinen lassen.
@@ -233,6 +233,54 @@ test("the daily history is capped at the newest days", () => {
   // Gekappt wird am älteren Ende: der jüngste Tag bleibt, der älteste fällt weg.
   assert.equal(keys.at(-1), "2027-01-01");
   assert.equal(keys.includes("2022-11-23"), false);
+});
+
+test("the sprint history keeps only plausible, recent runs", () => {
+  const runs = Array.from({ length: maxStoredSprints + 20 }, (_, index) => ({ answered: index + 1, correct: 1, totalMs: 1000 }));
+  const kept = sanitizeData({ version: 1, sprintRuns: runs } as never).sprintRuns;
+  assert.equal(kept.length, maxStoredSprints);
+  // Gekappt wird am älteren Ende: der jüngste Sprint bleibt im Diagramm.
+  assert.equal(kept.at(-1)?.answered, maxStoredSprints + 20);
+
+  const cleaned = sanitizeData({
+    version: 1,
+    sprintRuns: [null, { answered: 0, correct: 0, totalMs: 0 }, { answered: 10, correct: 99, totalMs: -5 }],
+  } as never).sprintRuns;
+  // Ein Sprint ohne Antworten ergäbe weder Tempo noch Genauigkeit.
+  assert.deepEqual(cleaned, [{ answered: 10, correct: 10, totalMs: 0 }]);
+  assert.deepEqual(sanitizeData({ version: 1, sprintRuns: "viele" } as never).sprintRuns, []);
+});
+
+test("an interrupted sprint comes back only if it is still usable", () => {
+  const stored = {
+    category: "all",
+    answered: 5,
+    correct: 99,
+    totalMs: 4000,
+    streak: 2,
+    points: 30,
+    progress: 99,
+    seconds: 41,
+    currentId: "haus",
+    finished: false,
+    wrongIds: ["haus", "erfundenes_wort"],
+    freshIds: [],
+    masteredAtStart: ["haus"],
+    recentIds: ["haus"],
+    reviews: [{ id: "haus", remaining: 9, dueAtAnswered: 7 }, { id: "haus", remaining: 0, dueAtAnswered: 7 }, null],
+  };
+  const resumed = sanitizeActiveSprint(stored as never);
+  assert.ok(resumed);
+  assert.equal(resumed.correct, 5);
+  // Ein zu hoher Fortschritt würde den Sprint sofort als geschafft zählen.
+  assert.equal(resumed.progress, sprintLength);
+  assert.deepEqual(resumed.wrongIds, ["haus"]);
+  assert.deepEqual(resumed.reviews, [{ id: "haus", remaining: 2, dueAtAnswered: 7 }]);
+
+  // Ohne gültiges Wort oder Kategorie gibt es nichts fortzusetzen.
+  assert.equal(sanitizeActiveSprint({ ...stored, currentId: "erfundenes_wort" } as never), null);
+  assert.equal(sanitizeActiveSprint({ ...stored, category: "neon" } as never), null);
+  assert.equal(sanitizeActiveSprint(null), null);
 });
 
 test("counters that build on each other cannot contradict", () => {
