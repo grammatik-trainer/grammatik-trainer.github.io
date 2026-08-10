@@ -183,7 +183,7 @@ test("invalid stored data falls back safely", () => {
   assert.equal("broken" in sanitized.mistakes, false);
 });
 
-test("a hostile transfer payload cannot poison the counters", () => {
+test("a damaged storage payload cannot poison the counters", () => {
   const hostile = sanitizeData({
     version: 1,
     totals: { answered: "1", correct: -5, totalMs: Number.NaN, points: 7.9 },

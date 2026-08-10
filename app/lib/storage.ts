@@ -72,9 +72,9 @@ function optionalMilliseconds(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
 }
 
-// Ein geteilter Fortschrittscode kommt von außen. Ohne Zahlenprüfung würde aus
-// totals.answered: "1" beim nächsten Treffer die Zeichenkette "11", und ein
-// aufgeblähtes mistakes-Objekt könnte den Speicher des Browsers sprengen.
+// Was im localStorage steht, kann von einer älteren Version oder von Hand stammen.
+// Ohne Zahlenprüfung würde aus totals.answered: "1" beim nächsten Treffer die
+// Zeichenkette "11", und ein aufgeblähtes mistakes-Objekt könnte den Speicher sprengen.
 function sanitizeMistakes(value: unknown): Record<string, MistakeStat> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const mistakes: Record<string, MistakeStat> = {};

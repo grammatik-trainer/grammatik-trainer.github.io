@@ -37,7 +37,6 @@ import {
   updateWordProgress,
 } from "../lib/engine";
 import { hintAt } from "../lib/hints";
-import { decodeProgress, encodeProgress, progressLink } from "../lib/transfer";
 import { emptyData, loadData, saveData, type SprintData } from "../lib/storage";
 import { routeState, trainingPath, viewPath, type TrainerView } from "../lib/routes";
 
@@ -108,12 +107,6 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
   const [canInstall, setCanInstall] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIos, setIsIos] = useState(false);
-  const [transferCode, setTransferCode] = useState("");
-  const [transferStatus, setTransferStatus] = useState<string | null>(null);
-  const linkImportBusy = useRef(false);
-  // Der Link-Import hängt nur am Fragment, nicht am Lernstand: läge data in seinen
-  // Abhängigkeiten, liefe er nach jeder Antwort erneut an.
-  const dataRef = useRef(data);
   const installPrompt = useRef<InstallPromptEvent | null>(null);
   const [category, setCategory] = useState<CategoryId>(initialCategory ?? "all");
   const pool = useMemo(() => nounsForCategory(category), [category]);
@@ -209,10 +202,6 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
       standalone.removeEventListener("change", readPlatform);
     };
   }, []);
-
-  useEffect(() => {
-    dataRef.current = data;
-  }, [data]);
 
   const persist = useCallback((next: SprintData) => {
     setData(next);
@@ -522,63 +511,6 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
     restartWith({ ...structuredClone(emptyData), theme: data.theme, settings: { ...data.settings } });
   };
 
-  /** Der Link geht überall hin; der nackte Code auch dorthin, wo es keine Adressleiste gibt. */
-  const copyTransfer = useCallback(async (asLink: boolean) => {
-    const code = await encodeProgress(data);
-    const text = asLink ? progressLink(code, window.location.origin) : code;
-    setTransferCode(text);
-    try {
-      await navigator.clipboard.writeText(text);
-      setTransferStatus(asLink ? "Link kopiert. Im anderen Browser öffnen." : "Code kopiert. Im anderen Browser unten einfügen.");
-    } catch {
-      setTransferStatus("Kopieren nicht erlaubt — markiere den Text im Feld und kopiere ihn selbst.");
-    }
-  }, [data]);
-
-  const importProgress = useCallback(async () => {
-    const next = await decodeProgress(transferCode, data);
-    if (!next) {
-      setTransferStatus("Das lässt sich nicht lesen — Code oder Link bitte vollständig einfügen.");
-      return;
-    }
-    if (!window.confirm("Fortschritt aus dem Code übernehmen? Dein aktueller Stand wird ersetzt.")) return;
-    setTransferCode("");
-    setTransferStatus(null);
-    restartWith(next);
-  }, [data, restartWith, transferCode]);
-
-  const importFromAddress = useCallback(async () => {
-    const match = /[#&]progress=([^&]+)/.exec(window.location.hash);
-    if (!match || linkImportBusy.current) return;
-    linkImportBusy.current = true;
-    // Direkt über die History statt über den Router: der Pfad bleibt ja gleich,
-    // und der Router lässt das Fragment dann stehen — der Import liefe endlos neu an.
-    window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
-    try {
-      const next = await decodeProgress(match[1], dataRef.current);
-      if (!next) {
-        // Der Link ist aus der Adresse schon weg — die Meldung darf also nicht verloren gehen.
-        window.alert("Dieser Link enthält keinen lesbaren Fortschritt.");
-        return;
-      }
-      if (!window.confirm("Fortschritt aus dem Link übernehmen? Dein aktueller Stand wird ersetzt.")) return;
-      restartWith(next);
-    } finally {
-      linkImportBusy.current = false;
-    }
-  }, [restartWith]);
-
-  useEffect(() => {
-    // Der Code steht im Fragment, nicht in der Query: so erreicht er weder Server noch Statistik.
-    if (!ready) return;
-    void importFromAddress();
-    // Ist die App im Zielbrowser schon offen, unterscheidet sich der eingefügte
-    // Link nur im Fragment: dann lädt nichts neu, und allein dieses Ereignis meldet ihn.
-    const handleHashChange = () => void importFromAddress();
-    window.addEventListener("hashchange", handleHashChange);
-    return () => window.removeEventListener("hashchange", handleHashChange);
-  }, [importFromAddress, ready]);
-
   const reviewNouns = useMemo(() => Object.entries(data.mistakes)
     .filter(([, stat]) => stat.wrong > 0)
     .sort((a, b) => b[1].wrong - a[1].wrong)
@@ -746,8 +678,7 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
                 <Icon>⤓</Icon>
                 <p>
                   <strong>Leg dir das Training auf den Startbildschirm.</strong><br />
-                  {canInstall ? "Ein Tippen — danach startet es ohne Browserleiste." : "Teilen → Zum Home-Bildschirm. Nur dort bleibt dein Fortschritt dauerhaft: Safari löscht ihn nach etwa einer Woche ohne Besuch."}<br />
-                  Deinen bisherigen Stand überträgst du danach über Menü → Einstellungen.
+                  {canInstall ? "Ein Tippen — danach startet es ohne Browserleiste." : "Teilen → Zum Home-Bildschirm. Nur dort bleibt dein Fortschritt dauerhaft: Safari löscht ihn nach etwa einer Woche ohne Besuch."}
                 </p>
                 {canInstall && <button className="install-button" type="button" onClick={runInstall}>Installieren</button>}
                 <button className="round-button" type="button" onClick={dismissInstallHint} aria-label="Hinweis ausblenden">×</button>
@@ -813,19 +744,6 @@ export function TrainerApp({ initialView = "training", initialCategory }: { init
                 {canInstall && <button className="install-button" type="button" onClick={runInstall}>Installieren</button>}
               </div>
             )}
-            <div className="setting-row">
-              <span><strong>Fortschritt übertragen</strong><small>Den Link im anderen Browser öffnen. Wo es keine Adressleiste gibt — etwa in der App auf dem Startbildschirm — den Code unten einfügen.</small></span>
-              <div className="transfer-buttons">
-                <button className="install-button" type="button" onClick={() => copyTransfer(true)}>Link</button>
-                <button className="install-button" type="button" onClick={() => copyTransfer(false)}>Code</button>
-              </div>
-            </div>
-            <div className="transfer-field">
-              <label className="sr-only" htmlFor="transfer-code">Übertragungscode oder Link</label>
-              <input id="transfer-code" type="text" value={transferCode} placeholder="ddd1:… oder Link" spellCheck={false} autoComplete="off" onChange={(event) => setTransferCode(event.target.value)} />
-              <button className="install-button" type="button" onClick={importProgress} disabled={!transferCode.trim()}>Einfügen</button>
-            </div>
-            {transferStatus && <p className="privacy-note" aria-live="polite">{transferStatus}</p>}
             <button className="reset-button" type="button" onClick={resetProgress}>Lernfortschritt zurücksetzen</button>
             <p className="privacy-note">Dein Fortschritt bleibt ausschließlich im Browser dieses Geräts.</p>
           </section>
