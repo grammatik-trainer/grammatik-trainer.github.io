@@ -105,13 +105,38 @@ export async function encodeProgress(data: SprintData): Promise<string> {
   return GZIP_PREFIX + toBase64Url(await pipe(bytes, new CompressionStream("gzip")));
 }
 
+/** Baut den Link, der den Fortschritt in einem anderen Browser öffnet. */
+export function progressLink(code: string, origin: string): string {
+  // Das Fragment erreicht weder Server noch Statistik — anders als eine Query.
+  return `${origin}/#progress=${encodeURIComponent(code)}`;
+}
+
+/**
+ * Nimmt entgegen, was Leute wirklich einfügen: den nackten Code, den ganzen Link
+ * mit dem Code darin, und beides gern mit Zeilenumbrüchen, die ein Messenger
+ * oder eine Mail hineingesetzt hat.
+ */
+export function normalizeTransferCode(input: string): string {
+  const fromLink = /[#?&]progress=([^&\s]+)/.exec(input);
+  const value = fromLink ? fromLink[1] : input;
+  // Aus einem Link kommt der Code prozentkodiert zurück; ein roher Code besteht
+  // nur aus base64url-Zeichen und dem Präfix, enthält also nie ein Prozentzeichen.
+  if (!value.includes("%")) return value.replace(/\s+/g, "");
+  try {
+    return decodeURIComponent(value).replace(/\s+/g, "");
+  } catch {
+    // Abgeschnittene Escape-Sequenz: der Code ist ohnehin unvollständig.
+    return "";
+  }
+}
+
 /**
  * Gibt die eingelesenen Daten zurück oder null, wenn der Code nicht zu dieser App
  * gehört, abgeschnitten wurde oder das Gerät kein gzip lesen kann.
  */
 export async function decodeProgress(code: string, current: SprintData = emptyData): Promise<SprintData | null> {
-  const trimmed = code.trim();
-  if (trimmed.length > maxCodeLength) return null;
+  if (code.length > maxCodeLength) return null;
+  const trimmed = normalizeTransferCode(code);
   const gzipped = trimmed.startsWith(GZIP_PREFIX);
   if (!gzipped && !trimmed.startsWith(PLAIN_PREFIX)) return null;
 

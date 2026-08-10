@@ -121,5 +121,11 @@ test("uses framework navigation so route metadata and robots stay synchronized",
   const component = await readFile(new URL("../app/components/trainer-app.tsx", import.meta.url), "utf8");
   assert.match(component, /router\.push\(path/);
   assert.match(component, /router\.replace\(trainingPath\(restoredCategory\)/);
-  assert.doesNotMatch(component, /history\.(?:pushState|replaceState)/);
+  assert.doesNotMatch(component, /history\.pushState/);
+  // Einzige erlaubte Ausnahme: das Fragment abräumen. Das ist kein Routenwechsel —
+  // Pfad und Query bleiben stehen — und der Router lässt das Fragment hier stehen,
+  // wodurch der Fortschritts-Import endlos neu anliefe.
+  const directWrites = component.match(/history\.replaceState\([^;]*\)/g) ?? [];
+  assert.equal(directWrites.length, 1);
+  for (const call of directWrites) assert.match(call, /window\.location\.pathname \+ window\.location\.search\)$/);
 });

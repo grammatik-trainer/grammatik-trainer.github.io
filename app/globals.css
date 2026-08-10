@@ -80,6 +80,7 @@ main { width: min(1480px, calc(100% - 36px)); margin: 0 auto; padding: 20px 0 34
 .site-footer a:hover, .site-footer a:focus-visible { color: var(--ink); }
 .install-note { grid-area: install; display: flex; align-items: center; gap: 14px; padding: 13px 14px 13px 18px; border: 1px solid #ded8ff; border-radius: 16px; background: linear-gradient(120deg, var(--violet-soft), var(--surface)); color: var(--ink); }
 .install-note .icon { font-size: 22px; }.install-note p { flex: 1; min-width: 0; margin: 0; font-size: 13px; line-height: 1.5; }
+.transfer-buttons { display: flex; gap: 8px; }
 .transfer-field { display: flex; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--line); }
 .transfer-field input { min-width: 0; flex: 1; padding: 9px 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface-soft); color: var(--ink); font-family: inherit; font-size: 13px; }
 .transfer-field button:disabled { opacity: .45; cursor: not-allowed; }

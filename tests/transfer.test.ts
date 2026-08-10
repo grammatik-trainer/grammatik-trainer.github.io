@@ -3,7 +3,7 @@ import test from "node:test";
 import { allNouns } from "../app/lib/data.ts";
 import { calculateDailyStreak, dayKey, previousDay } from "../app/lib/engine.ts";
 import { emptyData, type SprintData } from "../app/lib/storage.ts";
-import { decodeProgress, encodeProgress, transferDays } from "../app/lib/transfer.ts";
+import { decodeProgress, encodeProgress, progressLink, transferDays } from "../app/lib/transfer.ts";
 
 function heavyLearner(): SprintData {
   const data = structuredClone(emptyData);
@@ -92,6 +92,25 @@ test("unreadable codes are rejected instead of wiping progress", async () => {
   assert.equal(await decodeProgress("ddd9:AAAA", emptyData), null);
   // Abgeschnitten beim Kopieren — der häufigste Fehler von Hand.
   assert.equal(await decodeProgress(valid.slice(0, valid.length - 40), emptyData), null);
+});
+
+test("a pasted link carries the progress like the bare code", async () => {
+  const source = heavyLearner();
+  const link = progressLink(await encodeProgress(source), "https://grammatik-trainer.github.io");
+  // Der Code steht im Fragment: was hinter dem # steht, sieht der Server nie.
+  assert.ok(link.startsWith("https://grammatik-trainer.github.io/#progress=ddd1%3A"));
+  const restored = await decodeProgress(link, emptyData);
+  assert.ok(restored);
+  assert.deepEqual(restored.totals, source.totals);
+});
+
+test("a code broken over lines on the way through a messenger still reads", async () => {
+  const source = heavyLearner();
+  const code = await encodeProgress(source);
+  const wrapped = ` ${code.slice(0, 60)}\n${code.slice(60, 300)}\r\n ${code.slice(300)} `;
+  const restored = await decodeProgress(wrapped, emptyData);
+  assert.ok(restored);
+  assert.deepEqual(restored.totals, source.totals);
 });
 
 test("a compression bomb is refused instead of unpacked", async () => {
