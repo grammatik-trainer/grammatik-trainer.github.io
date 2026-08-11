@@ -767,7 +767,7 @@ export function TrainerApp() {
                   </div>
 
                   <div className="feedback-row" aria-live="polite">
-                    {feedback ? <span className={feedback.correct ? "success" : "error"}>{feedback.correct ? `Richtig · ${formatSeconds(feedback.elapsedMs)}` : `Fast — ${current.article} ${current.word}`}</span> : <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><em>oder</em><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></span>}
+                    {feedback && !feedback.correct ? <span className="error">{`Fast — ${current.article} ${current.word}`}</span> : <span className="key-hint"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><em>oder</em><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></span>}
                     {feedback && !feedback.correct && showCorrectAnswer && <button className="continue-button" type="button" onClick={() => continueAfterError.current?.()}>Weiter</button>}
                     <button type="button" onClick={() => setShowHint((value) => !value)} aria-pressed={showHint}>Hinweis</button>
                   </div>
