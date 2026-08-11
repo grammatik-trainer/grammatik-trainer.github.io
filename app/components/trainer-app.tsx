@@ -37,7 +37,7 @@ import {
   updateWordProgress,
 } from "../lib/engine";
 import { hintAt } from "../lib/hints";
-import { emptyData, loadActiveSprint, loadData, maxStoredSprints, saveActiveSprint, saveData, type SprintData } from "../lib/storage";
+import { emptyData, loadActiveSprint, loadData, maxStoredSprints, saveActiveSprint, saveData, type SprintData, type SprintRun } from "../lib/storage";
 import { routeState, trainingPath, viewPath, type TrainerView } from "../lib/routes";
 
 interface SessionState {
@@ -99,6 +99,7 @@ export function TrainerApp() {
   const view = routeState(pathname)?.view ?? "training";
   const [data, setData] = useState<SprintData>(emptyData);
   const [session, setSession] = useState<SessionState>(emptySession);
+  const [previousSprintMetrics, setPreviousSprintMetrics] = useState<SprintRun | null>(null);
   const [current, setCurrent] = useState<Noun>(() => nounsForCategory(initialCategory ?? "all")[0] ?? nouns[0]);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [showCorrectAnswer, setShowCorrectAnswer] = useState(false);
@@ -345,6 +346,7 @@ export function TrainerApp() {
     if (!correct) wrongThisSprint.current.add(current.id);
     const nextAnswered = session.answered + 1;
     const nextCorrect = session.correct + (correct ? 1 : 0);
+    if (session.answered === 0) setPreviousSprintMetrics(null);
     const previousReviewNeed = reviewNeeds.current[current.id] ?? 0;
     reviewQueue.current = reviewQueue.current.filter((item) => item.id !== current.id);
     if (!correct) {
@@ -470,6 +472,7 @@ export function TrainerApp() {
     freshThisSprint.current = new Set();
     setHintIndex((index) => index + 1);
     setMasteredAtSprintStart(masteredWordIds(data.mistakes));
+    setPreviousSprintMetrics({ answered: session.answered, correct: session.correct, totalMs: session.totalMs });
     setSession({ ...emptySession, streak: nextSprintStreak(session.streak) });
     setSeconds(0);
     setSprintFinished(false);
@@ -479,7 +482,7 @@ export function TrainerApp() {
     setCurrent((reviewItem && nounById.get(reviewItem.id)) || pickNext(pool, current.id, data.mistakes));
     startedAt.current = Date.now();
     lastActiveAt.current = Date.now();
-  }, [current.id, data.mistakes, pool, session.streak]);
+  }, [current.id, data.mistakes, pool, session]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -528,6 +531,7 @@ export function TrainerApp() {
     setMasteredAtSprintStart(masteredWordIds(nextData.mistakes));
     recentIds.current = [];
     setCategory(nextCategory);
+    setPreviousSprintMetrics(null);
     setSession(emptySession);
     setSeconds(0);
     setFeedback(null);
@@ -584,6 +588,7 @@ export function TrainerApp() {
     freshThisSprint.current = new Set();
     recentIds.current = [];
     setMasteredAtSprintStart(masteredWordIds(nextData.mistakes));
+    setPreviousSprintMetrics(null);
     setSession(emptySession);
     setSeconds(0);
     setFeedback(null);
@@ -638,8 +643,9 @@ export function TrainerApp() {
   const installOffered = !isStandalone && (canInstall || isIos);
   const showInstallHint = ready && installOffered && !data.settings.installHintDismissed
     && data.sprints.completed >= (isIos ? sprintsBeforeInstallHintIos : sprintsBeforeInstallHint);
-  const sessionAccuracy = accuracy(session.correct, session.answered);
-  const sessionAverage = session.answered ? session.totalMs / session.answered : 0;
+  const displayedSession = session.answered > 0 || !previousSprintMetrics ? session : previousSprintMetrics;
+  const sessionAccuracy = accuracy(displayedSession.correct, displayedSession.answered);
+  const sessionAverage = displayedSession.answered ? displayedSession.totalMs / displayedSession.answered : 0;
   const totalAccuracy = accuracy(data.totals.correct, data.totals.answered);
   const mistakesThisSprint = session.answered - session.correct;
   const structuredData = {
@@ -690,7 +696,7 @@ export function TrainerApp() {
                 <div className="card-heading"><h2>Deine Session</h2><span className="pill">Heute</span></div>
                 <div className="metric-grid local-data">
                   <div><Icon>◷</Icon><span>Tempo</span><strong>{formatSeconds(sessionAverage)}</strong><small>pausiert nach 10 s</small></div>
-                  <div><Icon>◎</Icon><span>Genauigkeit</span><strong>{session.answered ? `${sessionAccuracy}%` : "—"}</strong><small>richtig</small></div>
+                  <div><Icon>◎</Icon><span>Genauigkeit</span><strong>{displayedSession.answered ? `${sessionAccuracy}%` : "—"}</strong><small>richtig</small></div>
                   <div><Icon>ϟ</Icon><span>Antwortserie</span><strong>{session.streak}</strong><small>richtig in Folge</small></div>
                   <div><Icon>✓</Icon><span>Sichere Wörter</span><strong>{currentMastered}/{pool.length}</strong><small>{currentCategory.label}</small></div>
                 </div>
