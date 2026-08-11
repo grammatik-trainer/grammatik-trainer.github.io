@@ -101,6 +101,7 @@ export function TrainerApp() {
   const [session, setSession] = useState<SessionState>(emptySession);
   const [current, setCurrent] = useState<Noun>(() => nounsForCategory(initialCategory ?? "all")[0] ?? nouns[0]);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [showCorrectAnswer, setShowCorrectAnswer] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [ready, setReady] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -125,6 +126,8 @@ export function TrainerApp() {
   const freshThisSprint = useRef<Set<string>>(new Set());
   const [masteredAtSprintStart, setMasteredAtSprintStart] = useState<Set<string>>(() => new Set());
   const nextTimer = useRef<number | null>(null);
+  const revealTimer = useRef<number | null>(null);
+  const continueAfterError = useRef<(() => void) | null>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -226,6 +229,8 @@ export function TrainerApp() {
 
   useEffect(() => () => {
     if (nextTimer.current !== null) window.clearTimeout(nextTimer.current);
+    if (revealTimer.current !== null) window.clearTimeout(revealTimer.current);
+    continueAfterError.current = null;
   }, []);
 
   useEffect(() => {
@@ -417,12 +422,22 @@ export function TrainerApp() {
     };
 
     setFeedback({ choice, correct, elapsedMs });
+    setShowCorrectAnswer(correct);
+    if (!correct) {
+      revealTimer.current = window.setTimeout(() => {
+        setShowCorrectAnswer(true);
+        revealTimer.current = null;
+      }, 1000);
+    }
     setSession(nextSession);
     persist(nextData);
     playTone(correct);
     if (completesSprint) lastActiveAt.current = 0;
-    nextTimer.current = window.setTimeout(() => {
+    const advanceToNextQuestion = () => {
+      nextTimer.current = null;
+      continueAfterError.current = null;
       setFeedback(null);
+      setShowCorrectAnswer(false);
       setShowHint(false);
       if (completesSprint) {
         setSprintFinished(true);
@@ -441,7 +456,12 @@ export function TrainerApp() {
       setCurrent((reviewItem && nounById.get(reviewItem.id)) || pickNext(quotaPool, current.id, nextData.mistakes, Math.random, recentIds.current));
       startedAt.current = Date.now();
       lastActiveAt.current = Date.now();
-    }, feedbackDelay(nextData.settings.feedbackDelay, correct));
+    };
+    if (correct) {
+      nextTimer.current = window.setTimeout(advanceToNextQuestion, feedbackDelay(nextData.settings.feedbackDelay, true));
+    } else {
+      continueAfterError.current = advanceToNextQuestion;
+    }
   }, [current, data, feedback, masteredAtSprintStart, persist, playTone, pool, ready, session, sprintFinished, view]);
 
   const startNextSprint = useCallback(() => {
@@ -497,6 +517,8 @@ export function TrainerApp() {
 
   const changeCategory = useCallback((nextCategory: CategoryId, historyMode: "push" | "none" = "push") => {
     if (nextTimer.current !== null) window.clearTimeout(nextTimer.current);
+    if (revealTimer.current !== null) window.clearTimeout(revealTimer.current);
+    continueAfterError.current = null;
     const nextPool = nounsForCategory(nextCategory);
     const nextData = { ...data, settings: { ...data.settings, category: nextCategory } };
     reviewQueue.current = [];
@@ -509,6 +531,7 @@ export function TrainerApp() {
     setSession(emptySession);
     setSeconds(0);
     setFeedback(null);
+    setShowCorrectAnswer(false);
     setShowHint(false);
     setSprintFinished(false);
     setCurrent(pickNext(nextPool, "", nextData.mistakes));
@@ -553,6 +576,8 @@ export function TrainerApp() {
   const restartWith = useCallback((nextData: SprintData) => {
     // Ein noch laufender Feedback-Timer würde den frischen Sprint gleich wieder überschreiben.
     if (nextTimer.current !== null) window.clearTimeout(nextTimer.current);
+    if (revealTimer.current !== null) window.clearTimeout(revealTimer.current);
+    continueAfterError.current = null;
     reviewQueue.current = [];
     reviewNeeds.current = {};
     wrongThisSprint.current = new Set();
@@ -562,6 +587,7 @@ export function TrainerApp() {
     setSession(emptySession);
     setSeconds(0);
     setFeedback(null);
+    setShowCorrectAnswer(false);
     setShowHint(false);
     setSprintFinished(false);
     setSettingsOpen(false);
@@ -731,15 +757,18 @@ export function TrainerApp() {
                   <div className="answers" aria-label="Antwortmöglichkeiten">
                     {articles.map((article, index) => {
                       const state = feedback
-                        ? article === current.article ? "correct" : article === feedback.choice ? "wrong" : "muted"
+                        ? article === feedback.choice
+                          ? feedback.correct ? "correct" : "wrong"
+                          : !feedback.correct && showCorrectAnswer && article === current.article ? "correct" : "muted"
                         : "";
-                      const revealedCorrect = feedback && !feedback.correct && article === current.article;
-                      return <button data-testid={`answer-${article}`} className={`answer answer-${article} ${state}${revealedCorrect ? " revealed-correct" : ""}`} type="button" disabled={!ready || Boolean(feedback)} onClick={() => answer(article)} aria-label={`${article}${revealedCorrect ? " — richtige Antwort" : ""}`} key={article}><kbd>{index + 1}</kbd><strong>{article}</strong><small>{["J", "K", "L"][index]}</small></button>;
+                      const revealedCorrect = feedback && !feedback.correct && showCorrectAnswer && article === current.article;
+                      return <button data-testid={`answer-${article}`} className={`answer answer-${article} ${state}${revealedCorrect ? " revealed-correct" : ""}`} type="button" disabled={!ready || (Boolean(feedback) && !revealedCorrect)} onClick={() => revealedCorrect ? continueAfterError.current?.() : answer(article)} aria-label={`${article}${revealedCorrect ? " — richtige Antwort, weiter" : ""}`} key={article}><kbd>{index + 1}</kbd><strong>{article}</strong><small>{["J", "K", "L"][index]}</small></button>;
                     })}
                   </div>
 
                   <div className="feedback-row" aria-live="polite">
                     {feedback ? <span className={feedback.correct ? "success" : "error"}>{feedback.correct ? `Richtig · ${formatSeconds(feedback.elapsedMs)}` : `Fast — ${current.article} ${current.word}`}</span> : <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><em>oder</em><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></span>}
+                    {feedback && !feedback.correct && showCorrectAnswer && <button className="continue-button" type="button" onClick={() => continueAfterError.current?.()}>Weiter</button>}
                     <button type="button" onClick={() => setShowHint((value) => !value)} aria-pressed={showHint}>Hinweis</button>
                   </div>
                 </>
