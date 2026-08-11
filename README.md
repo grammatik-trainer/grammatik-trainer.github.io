@@ -2,7 +2,7 @@
 
 **→ [grammatik-trainer.github.io](https://grammatik-trainer.github.io/)**
 
-A fast, keyboard-first trainer for German noun genders. Pick **der**, **die** or
+A fast trainer for German noun genders. Pick **der**, **die** or
 **das**, and the next word is already waiting — 300 nouns from A1 to B2 in the
 nominative case, with your mistakes scheduled for extra repetition.
 
@@ -31,20 +31,6 @@ npm run dev
 
 `npm test` runs type checking, linting, the production build, the engine
 contracts and an HTML smoke test.
-
-## Deployment
-
-The site is a static export deployed to GitHub Pages by
-[.github/workflows/deploy.yml](.github/workflows/deploy.yml) on every push to
-`main`. Two things are worth knowing before changing the setup:
-
-- `SITE_ORIGIN` must be set at build time — it is what canonical URLs, Open
-  Graph tags and the sitemap are built from. Without it the build falls back to
-  `http://localhost:3000` silently.
-- `robots.txt` and `sitemap.xml` are generated into `public/` by
-  [build/generate-sitemap.mjs](build/generate-sitemap.mjs) rather than by
-  `app/robots.ts` and `app/sitemap.ts`, because a static export does not emit
-  metadata routes.
 
 ## License
 
